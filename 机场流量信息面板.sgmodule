@@ -1,17 +1,29 @@
 #!name=机场流量信息
 #!desc=显示多个机场剩余流量信息以及套餐到期日期
-#!category=检测工具
+#!category=机场流量信息
 #!arguments=NAME1:第一个机场名字,URL1:第一个机场订阅,RESET_DAY1:第一个重置日期,ICON1:第一个图标,COLOR1:第一个颜色,NAME2:第二个机场名字,URL2:第二个机场订阅,RESET_DAY2:第二个重置日期,ICON2:第二个图标,COLOR2:第二个颜色,NAME3:第三个机场名字,URL3:第三个机场订阅,RESET_DAY3:第三个重置日期,ICON3:第三个图标,COLOR3:第三个颜色
-#!arguments-desc=[参数设置]\n\n每个机场的参数设置相同：\n⓵ NAMEx: 机场名字\n⓶ URLx: 编码后的机场订阅\n⓷ RESET_DAYx: 流量每月重置的日期\n⓸ ICONx: 自定义面板图标\n⓹ COLORx: 自定义图标颜色\n\n注：x为机场序号(1-3)，不需要的机场参数留空即可
+#!arguments-desc=[参数设置]\n\n每个机场的参数设置相同：\n⓵ NAMEx: 机场名字\n⓶ URLx: 编码后的机场订阅(必填项，不填则不显示该机场)\n⓷ RESET_DAYx: 流量每月重置的日期\n⓸ ICONx: 自定义面板图标\n⓹ COLORx: 自定义图标颜色\n\n注：x为机场序号(1-3)，不需要的机场参数留空即可
 # 更新日期：2024.12.12
-# 版本：1.0
+# 版本：2.0
 
 [Panel]
+{{#URL1}}
 Sub1=script-name=Sub1,update-interval=3600
+{{/URL1}}
+{{#URL2}}
 Sub2=script-name=Sub2,update-interval=3600
+{{/URL2}}
+{{#URL3}}
 Sub3=script-name=Sub3,update-interval=3600
+{{/URL3}}
 
 [Script]
+{{#URL1}}
 Sub1=type=generic,timeout=10,script-path=https://raw.githubusercontent.com/Rabbit-Spec/Surge/Master/Module/Panel/Sub-info/Moore/Sub-info.js,script-update-interval=0,argument=url={{{URL1}}}&reset_day={{{RESET_DAY1}}}&title={{{NAME1}}}&icon={{{ICON1}}}&color={{{COLOR1}}}
+{{/URL1}}
+{{#URL2}}
 Sub2=type=generic,timeout=10,script-path=https://raw.githubusercontent.com/Rabbit-Spec/Surge/Master/Module/Panel/Sub-info/Moore/Sub-info.js,script-update-interval=0,argument=url={{{URL2}}}&reset_day={{{RESET_DAY2}}}&title={{{NAME2}}}&icon={{{ICON2}}}&color={{{COLOR2}}}
+{{/URL2}}
+{{#URL3}}
 Sub3=type=generic,timeout=10,script-path=https://raw.githubusercontent.com/Rabbit-Spec/Surge/Master/Module/Panel/Sub-info/Moore/Sub-info.js,script-update-interval=0,argument=url={{{URL3}}}&reset_day={{{RESET_DAY3}}}&title={{{NAME3}}}&icon={{{ICON3}}}&color={{{COLOR3}}}
+{{/URL3}}
