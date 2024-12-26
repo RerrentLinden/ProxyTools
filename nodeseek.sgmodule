@@ -1,10 +1,18 @@
-#!name=NodeSeek获取token并签到
-#!desc=NodeSeek获取token并签到
+#!name=NodeSeek自动签到
+#!desc=NodeSeek论坛每日自动签到模块
+
+# 作者信息
+# 原创作者: Sliverkiss
+# 脚本链接: https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js
 
 [Script]
-NodeSeek获取token = type=http-response,pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/.+\?readme=1&signature=1&phone=1,requires-body=1,max-size=0,binary-body-mode=0,timeout=60,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,script-update-interval=0
+# 定时签到任务
+# 执行时间: 每天0:10
+NodeSeek = type=cron,cronexp="10 0 * * *",script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,timeout=180,wake-system=1
 
-nodeseek签到 = type=cron,cronexp=0 8 * * *,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,script-update-interval=0
+# Token获取
+# 注释状态,需要时取消注释使用
+#NodeSeek获取token = type=http-response,pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/(.+)phone=1,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,requires-body=true,timeout=60
 
 [MITM]
-hostname = www.nodeseek.com
+hostname = %APPEND% www.nodeseek.com
