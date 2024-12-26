@@ -1,0 +1,10 @@
+#!name=NodeSeek获取token并签到
+#!desc=NodeSeek获取token并签到
+
+[Script]
+NodeSeek获取token = type=http-response,pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/.+\?readme=1&signature=1&phone=1,requires-body=1,max-size=0,binary-body-mode=0,timeout=60,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,script-update-interval=0
+
+nodeseek签到 = type=cron,cronexp=0 8 * * *,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,script-update-interval=0
+
+[MITM]
+hostname = www.nodeseek.com
