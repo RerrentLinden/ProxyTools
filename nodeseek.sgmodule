@@ -12,7 +12,7 @@ NodeSeek = type=cron,cronexp="10 0 * * *",script-path=https://gist.githubusercon
 
 # Token获取
 # 注释状态,需要时取消注释使用
-NodeSeek获取token = type=http-response,pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/(.+)phone=1,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,requires-body=true,timeout=60
+#NodeSeek获取token = type=http-response,pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/(.+)phone=1,script-path=https://gist.githubusercontent.com/Sliverkiss/2b5acc2c4960dd06618c6912302c2c7f/raw/nodeseek.js,requires-body=true,timeout=60,notify-title="NodeSeek",notify-body="Token获取成功 ✅"
 
 [MITM]
 hostname = %APPEND% www.nodeseek.com
