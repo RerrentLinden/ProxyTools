@@ -1,16 +1,16 @@
 #!name=科研通自动签到
-#!desc=每日定时签到，打开网站个人中心页面自动获取Cookie
+#!desc=每日定时签到，登录科研通网站后自动获取Cookie
 #!author=RerrentLinden
 #!update=2024-12-27
 #!arguments=定时签到:0 9 * * *,禁用脚本:科研通获取Cookie,禁用MITM:hostname
-#!arguments-desc=定时签到：Cron表达式，默认每天09:00执行\n\n禁用脚本：禁用Cookie获取功能，输入 # 表示禁用\n\n禁用MITM：禁用MITM主机名，输入 # 表示禁用\n\n获取Cookie：打开 www.ablesci.com 登录并进入个人中心页面
+#!arguments-desc=定时签到：Cron表达式，默认每天09:00执行\n\n禁用脚本：禁用Cookie获取功能，输入 # 表示禁用\n\n禁用MITM：禁用MITM主机名，输入 # 表示禁用\n\n获取Cookie：安装模块后登录科研通网站即可自动获取
 
 [Script]
 # 定时签到任务
 科研通定时签到 = type=cron,cronexp="{{{定时签到}}}",wake-system=1,timeout=120,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/refs/heads/main/sciencehub-script.js
 
 # Cookie获取配置
-{{{禁用脚本}}} = type=http-request,pattern=^https:\/\/www\.ablesci\.com\/user\/signin$,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/refs/heads/main/sciencehub-script.js,requires-body=0
+{{{禁用脚本}}} = type=http-request,pattern=^https:\/\/www\.ablesci\.com\/user\/sign$,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/refs/heads/main/sciencehub-script.js,requires-body=0
 
 [MITM]
 {{{禁用MITM}}} = %APPEND% www.ablesci.com
