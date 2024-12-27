@@ -1,6 +1,6 @@
 /*
 科研通每日签到脚本 - Surge专用版
-更新说明：优化 Cookie 获取逻辑，匹配 _identity-frontend 完整值
+更新说明：优化超时处理，增加错误捕获
 更新时间：2024-12-27
 */
 
@@ -24,36 +24,52 @@ function sign() {
         'Connection': 'keep-alive',
         'Referer': 'https://www.ablesci.com/',
         'X-Requested-With': 'XMLHttpRequest',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
     };
 
-    $httpClient.get({
-        url: signUrl,
-        headers: headers
-    }, (error, response, data) => {
-        if (error) {
-            $.msg($.name, '❌ 签到失败', '网络请求异常');
-            $.done();
-            return;
-        }
-
-        try {
-            const result = JSON.parse(data);
-            if (result.code === 0) {
-                const points = result.data.signpoint || 0;
-                const count = result.data.signcount || 0;
-                const msg = `获得${points}积分，已连续签到${count}天`;
-                $.msg($.name, '🎉 签到成功', msg);
-            } else if (result.code === 1) {
-                $.msg($.name, '📢 重复签到', result.msg || '今日已签到');
-            } else {
-                $.msg($.name, '❌ 签到失败', result.msg || '未知错误');
-            }
-        } catch (e) {
-            $.msg($.name, '❌ 签到失败', '数据解析异常');
-        }
-        $.done();
+    // 设置请求超时
+    const timeoutPromise = new Promise((resolve, reject) => {
+        setTimeout(() => reject(new Error('请求超时')), 5000);
     });
+
+    const fetchPromise = new Promise((resolve, reject) => {
+        $httpClient.get({
+            url: signUrl,
+            headers: headers,
+            timeout: 5000  // 5秒超时
+        }, (error, response, data) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve({response, data});
+        });
+    });
+
+    Promise.race([fetchPromise, timeoutPromise])
+        .then(({response, data}) => {
+            try {
+                const result = JSON.parse(data);
+                if (result.code === 0) {
+                    const points = result.data.signpoint || 0;
+                    const count = result.data.signcount || 0;
+                    const msg = `获得${points}积分，已连续签到${count}天`;
+                    $.msg($.name, '🎉 签到成功', msg);
+                } else if (result.code === 1) {
+                    $.msg($.name, '📢 重复签到', result.msg || '今日已签到');
+                } else {
+                    $.msg($.name, '❌ 签到失败', result.msg || '未知错误');
+                }
+            } catch (e) {
+                $.msg($.name, '❌ 签到失败', '数据解析异常');
+            }
+        })
+        .catch(err => {
+            $.msg($.name, '❌ 签到失败', err.message || '网络请求异常');
+        })
+        .finally(() => {
+            $.done();
+        });
 }
 
 // Cookie获取函数
@@ -116,9 +132,14 @@ function Env(t) {
 
 // 脚本入口
 !(async () => {
-    if ($request && $request.method === 'GET') {
-        getCookie();
-    } else {
-        sign();
+    try {
+        if ($request && $request.method === 'GET') {
+            getCookie();
+        } else {
+            sign();
+        }
+    } catch (e) {
+        $.msg($.name, '❌ 脚本执行异常', e.message || '未知错误');
+        $.done();
     }
 })();
