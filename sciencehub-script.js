@@ -1,6 +1,6 @@
 /*
 科研通每日签到脚本 - Surge专用版
-更新说明：优化超时处理，增加错误捕获
+更新说明：修复定时任务执行错误
 更新时间：2024-12-27
 */
 
@@ -10,6 +10,7 @@ const cookieKey = 'sciencehubCookie';
 const cookieName = '_identity-frontend';
 
 function sign() {
+    console.log('开始执行签到');
     const cookie = $.getdata(cookieKey);
     if (!cookie) {
         $.msg($.name, '❌ 签到失败', '请先获取Cookie');
@@ -27,53 +28,44 @@ function sign() {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
     };
 
-    // 设置请求超时
-    const timeoutPromise = new Promise((resolve, reject) => {
-        setTimeout(() => reject(new Error('请求超时')), 5000);
-    });
-
-    const fetchPromise = new Promise((resolve, reject) => {
-        $httpClient.get({
-            url: signUrl,
-            headers: headers,
-            timeout: 5000  // 5秒超时
-        }, (error, response, data) => {
+    $httpClient.get({
+        url: signUrl,
+        headers: headers,
+        timeout: 5000
+    }, (error, response, data) => {
+        try {
             if (error) {
-                reject(error);
+                $.msg($.name, '❌ 签到失败', '网络请求异常');
                 return;
             }
-            resolve({response, data});
-        });
-    });
 
-    Promise.race([fetchPromise, timeoutPromise])
-        .then(({response, data}) => {
-            try {
-                const result = JSON.parse(data);
-                if (result.code === 0) {
-                    const points = result.data.signpoint || 0;
-                    const count = result.data.signcount || 0;
-                    const msg = `获得${points}积分，已连续签到${count}天`;
-                    $.msg($.name, '🎉 签到成功', msg);
-                } else if (result.code === 1) {
-                    $.msg($.name, '📢 重复签到', result.msg || '今日已签到');
-                } else {
-                    $.msg($.name, '❌ 签到失败', result.msg || '未知错误');
-                }
-            } catch (e) {
-                $.msg($.name, '❌ 签到失败', '数据解析异常');
+            const result = JSON.parse(data);
+            if (result.code === 0) {
+                const points = result.data.signpoint || 0;
+                const count = result.data.signcount || 0;
+                const msg = `获得${points}积分，已连续签到${count}天`;
+                $.msg($.name, '🎉 签到成功', msg);
+            } else if (result.code === 1) {
+                $.msg($.name, '📢 重复签到', result.msg || '今日已签到');
+            } else {
+                $.msg($.name, '❌ 签到失败', result.msg || '未知错误');
             }
-        })
-        .catch(err => {
-            $.msg($.name, '❌ 签到失败', err.message || '网络请求异常');
-        })
-        .finally(() => {
+        } catch (e) {
+            $.msg($.name, '❌ 签到失败', '数据解析异常');
+        } finally {
             $.done();
-        });
+        }
+    });
 }
 
 // Cookie获取函数
 function getCookie() {
+    if (!$response) {
+        $.msg($.name, '❌ Cookie获取失败', '无响应数据');
+        $.done();
+        return;
+    }
+
     const setCookie = $response.headers['Set-Cookie'] || $response.headers['set-cookie'] || '';
     if (setCookie) {
         const match = setCookie.match(new RegExp(`${cookieName}=([^;]+)`));
@@ -132,14 +124,10 @@ function Env(t) {
 
 // 脚本入口
 !(async () => {
-    try {
-        if ($request && $request.method === 'GET') {
-            getCookie();
-        } else {
-            sign();
-        }
-    } catch (e) {
-        $.msg($.name, '❌ 脚本执行异常', e.message || '未知错误');
-        $.done();
+    // 通过判断是否存在$request来区分是定时任务还是Cookie获取
+    if (typeof $request !== 'undefined' && $request.method === 'GET') {
+        getCookie();
+    } else {
+        sign();
     }
 })();
