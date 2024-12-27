@@ -1,33 +1,30 @@
 /*
 科研通每日签到脚本 - Surge专用版
-说明：
-1. Cookie获取: 打开www.ablesci.com，进入个人中心页面自动获取Cookie
-2. 重写规则: ^https:\/\/www\.ablesci\.com\/user\/signin$
-3. 获取成功后可以禁用Cookie获取脚本
-4. 支持自定义签到时间
+更新说明：优化Cookie获取逻辑，现在会自动获取登录后的_identity-frontend Cookie
 更新时间：2024-12-27
 */
 
 const $ = new Env('科研通');
-const signUrl = "https://www.ablesci.com/user/sign";  // 签到接口
-const signinUrl = "https://www.ablesci.com/user/signin";  // 登录接口，用于获取Cookie
+const signUrl = "https://www.ablesci.com/user/sign";
 const cookieKey = 'sciencehubCookie';
+const cookieName = '_identity-frontend';
 
 function sign() {
     const cookie = $.getdata(cookieKey);
     if (!cookie) {
-        $.msg($.name, '❌ 签到失败', '请先获取Cookie：打开科研通网站，进入个人中心页面');
+        $.msg($.name, '❌ 签到失败', '请先登录获取Cookie');
         $.done();
         return;
     }
 
     const headers = {
         'Cookie': cookie,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json, text/plain, */*',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Connection': 'keep-alive',
-        'Referer': 'https://www.ablesci.com'
+        'Referer': 'https://www.ablesci.com/',
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
     };
 
     $httpClient.get({
@@ -61,14 +58,21 @@ function sign() {
 
 // Cookie获取函数
 function getCookie() {
-    const cookie = $request.headers['Cookie'] || $request.headers['cookie'];
-    if (cookie) {
+    let cookies = $request.headers['Cookie'] || $request.headers['cookie'] || '';
+    if (!cookies) {
+        cookies = ($response.headers['Set-Cookie'] || $response.headers['set-cookie'] || []).join(';');
+    }
+    
+    // 提取_identity-frontend Cookie
+    const matchCookie = cookies.match(new RegExp(`${cookieName}=[^;]+`));
+    if (matchCookie) {
+        const newCookie = matchCookie[0];
         const oldCookie = $.getdata(cookieKey);
-        if (oldCookie !== cookie) {
-            if ($.setdata(cookie, cookieKey)) {
+        if (oldCookie !== newCookie) {
+            if ($.setdata(newCookie, cookieKey)) {
                 $.msg($.name, '✅ Cookie获取/更新成功', '');
             } else {
-                $.msg($.name, '❌ Cookie获取失败', '请重试或手动抓包获取');
+                $.msg($.name, '❌ Cookie获取失败', '存储异常');
             }
         } else {
             $.msg($.name, '📢 Cookie未变化', 'Cookie和已保存的相同，无需更新');
@@ -115,7 +119,7 @@ function Env(t) {
 
 // 脚本入口
 !(async () => {
-    if ($request && $request.method === 'GET') {
+    if ($request && $request.method === 'POST') {
         getCookie();
     } else {
         sign();
