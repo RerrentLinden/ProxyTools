@@ -1,133 +1,118 @@
 /*
 科研通每日签到脚本 - Surge专用版
-更新说明：修复定时任务执行错误
+
+脚本说明：
+1. 用于科研通(ablesci.com)的每日自动签到
+2. 支持自动获取Cookie和定时签到功能
+3. 签到结果通过通知反馈
+
+致谢：
+1. 原始代码作者：@imoki (https://github.com/imoki)
+2. 原仓库地址：https://github.com/imoki/sign_script
+3. Claude AI 提供优化建议和代码重构
+
+更新说明：基于原作者代码重构，优化性能和资源利用
 更新时间：2024-12-27
+脚本作者：@RerrentLinden
+
+脚本遵循开源协议，转载请注明出处
 */
 
-const $ = new Env('科研通');
-const signUrl = "https://www.ablesci.com/user/sign";
-const cookieKey = 'sciencehubCookie';
-const cookieName = '_identity-frontend';
+const NAME = '科研通';
+const SIGN_URL = 'https://www.ablesci.com/user/sign';
+const COOKIE_KEY = 'sciencehubCookie';
+const COOKIE_NAME = '_identity-frontend';
+const TIMEOUT = 5000;
 
-function sign() {
-    console.log('开始执行签到');
-    const cookie = $.getdata(cookieKey);
-    if (!cookie) {
-        $.msg($.name, '❌ 签到失败', '请先获取Cookie');
-        $.done();
-        return;
+const $ = {
+    name: NAME,
+    // 精简通知函数
+    msg: (title, subtitle = '', body = '') => $notification.post(title, subtitle, body),
+    // 优化存储操作
+    store: {
+        read: (key) => $persistentStore.read(key),
+        write: (val, key) => $persistentStore.write(val, key)
     }
+};
 
-    const headers = {
-        'Cookie': `${cookieName}=${cookie}`,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'zh-CN,zh;q=0.9',
-        'Connection': 'keep-alive',
-        'Referer': 'https://www.ablesci.com/',
-        'X-Requested-With': 'XMLHttpRequest',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
-    };
+// 优化的请求头生成函数
+const getHeaders = (cookie) => ({
+    'Cookie': `${COOKIE_NAME}=${cookie}`,
+    'Accept': 'application/json, */*',
+    'Accept-Language': 'zh-CN,zh',
+    'Referer': 'https://www.ablesci.com/',
+    'X-Requested-With': 'XMLHttpRequest',
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
+});
+
+// 签到函数优化
+const sign = () => {
+    const cookie = $.store.read(COOKIE_KEY);
+    if (!cookie) {
+        $.msg(NAME, '❌ 签到失败', '请先获取Cookie');
+        return $done();
+    }
 
     $httpClient.get({
-        url: signUrl,
-        headers: headers,
-        timeout: 5000
+        url: SIGN_URL,
+        headers: getHeaders(cookie),
+        timeout: TIMEOUT
     }, (error, response, data) => {
+        let subtitle = '', body = '';
+        
         try {
-            if (error) {
-                $.msg($.name, '❌ 签到失败', '网络请求异常');
-                return;
-            }
-
+            if (error) throw new Error('网络请求异常');
+            
             const result = JSON.parse(data);
-            if (result.code === 0) {
-                const points = result.data.signpoint || 0;
-                const count = result.data.signcount || 0;
-                const msg = `获得${points}积分，已连续签到${count}天`;
-                $.msg($.name, '🎉 签到成功', msg);
-            } else if (result.code === 1) {
-                $.msg($.name, '📢 重复签到', result.msg || '今日已签到');
-            } else {
-                $.msg($.name, '❌ 签到失败', result.msg || '未知错误');
+            switch (result.code) {
+                case 0:
+                    const {signpoint: points = 0, signcount: count = 0} = result.data || {};
+                    subtitle = '🎉 签到成功';
+                    body = `获得${points}积分，已连续签到${count}天`;
+                    break;
+                case 1:
+                    subtitle = '📢 重复签到';
+                    body = result.msg || '今日已签到';
+                    break;
+                default:
+                    throw new Error(result.msg || '签到失败');
             }
         } catch (e) {
-            $.msg($.name, '❌ 签到失败', '数据解析异常');
-        } finally {
-            $.done();
+            subtitle = '❌ 签到失败';
+            body = e.message || '未知错误';
         }
+        
+        $.msg(NAME, subtitle, body);
+        $done();
     });
-}
+};
 
-// Cookie获取函数
-function getCookie() {
-    if (!$response) {
-        $.msg($.name, '❌ Cookie获取失败', '无响应数据');
-        $.done();
-        return;
+// Cookie获取函数优化
+const getCookie = () => {
+    if (!$response?.headers) {
+        $.msg(NAME, '❌ Cookie获取失败', '无响应数据');
+        return $done();
     }
 
-    const setCookie = $response.headers['Set-Cookie'] || $response.headers['set-cookie'] || '';
-    if (setCookie) {
-        const match = setCookie.match(new RegExp(`${cookieName}=([^;]+)`));
-        if (match) {
-            const newCookie = match[1];
-            const oldCookie = $.getdata(cookieKey);
-            if (oldCookie !== newCookie) {
-                if ($.setdata(newCookie, cookieKey)) {
-                    $.msg($.name, '✅ Cookie获取成功', '');
-                } else {
-                    $.msg($.name, '❌ Cookie获取失败', '存储错误');
-                }
-            } else {
-                $.msg($.name, '📢 Cookie未变化', 'Cookie和已保存的相同');
-            }
-        }
-    }
-    $.done();
-}
+    const setCookie = $response.headers['Set-Cookie'] || $response.headers['set-cookie'];
+    if (!setCookie) return $done();
 
-// Surge环境函数
-function Env(t) {
-    this.name = t;
-    this.logs = [];
-    this.isSurge = () => true;
-    
-    this.msg = (title, subtitle = '', body = '') => {
-        $notification.post(title, subtitle, body);
-    };
-    
-    this.log = (msg) => {
-        this.logs.push(msg);
-        console.log(msg);
-    };
-    
-    this.setdata = (val, key) => {
-        try {
-            return $persistentStore.write(val, key);
-        } catch (e) {
-            console.log(e);
-            return false;
-        }
-    };
-    
-    this.getdata = (key) => {
-        try {
-            return $persistentStore.read(key);
-        } catch (e) {
-            console.log(e);
-            return null;
-        }
-    };
-    
-    this.done = (val = {}) => $done(val);
-}
+    const match = setCookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
+    if (!match) return $done();
 
-// 脚本入口
-!(async () => {
-    // 通过判断是否存在$request来区分是定时任务还是Cookie获取
-    if (typeof $request !== 'undefined' && $request.method === 'GET') {
-        getCookie();
+    const newCookie = match[1];
+    const oldCookie = $.store.read(COOKIE_KEY);
+    
+    if (newCookie === oldCookie) {
+        $.msg(NAME, '📢 Cookie未变化', '');
+    } else if ($.store.write(newCookie, COOKIE_KEY)) {
+        $.msg(NAME, '✅ Cookie获取成功', '');
     } else {
-        sign();
+        $.msg(NAME, '❌ Cookie获取失败', '存储错误');
     }
-})();
+    
+    $done();
+};
+
+// 优化的入口函数
+(() => typeof $request !== 'undefined' && $request.method === 'GET' ? getCookie() : sign())();
