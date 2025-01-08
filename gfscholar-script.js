@@ -6,53 +6,75 @@
 2. 支持自动获取Cookie和定时签到功能
 3. 签到结果通过通知反馈
 
-基于科研通签到脚本重构
 更新时间：2025-01-09
 脚本作者：@RerrentLinden
-
-脚本遵循开源协议，转载请注明出处
 */
 
 // 基础配置
 const NAME = '谷粉学术';
-const SIGN_URL = 'https://bbs.yuyingufen.com/daily/sign';  // 签到接口
-const COOKIE_KEY = 'gfscholarCookie';  // 存储Cookie的键名
-const COOKIE_NAME = '7BsM_2132';  // Cookie名称，根据截图显示的实际Cookie名
-const TIMEOUT = 5000;  // 超时时间(毫秒)
+const SIGN_URL = 'https://bbs.yuyingufen.com/daily/sign';
+const COOKIE_KEY = 'gfscholarCookies';  // 改为复数，因为要存储多个Cookie
+const COOKIE_PREFIX = '7BsM_2132';  // Cookie前缀
+const TIMEOUT = 5000;
+
+// 需要获取的Cookie列表
+const REQUIRED_COOKIES = [
+    'auth',
+    'saltkey',
+    'sid',
+    'ulastactivity'
+];
 
 // 工具函数封装
 const $ = {
     name: NAME,
-    // 通知函数
     msg: (title, subtitle = '', body = '') => $notification.post(title, subtitle, body),
-    // 存储操作
     store: {
-        read: (key) => $persistentStore.read(key),
-        write: (val, key) => $persistentStore.write(val, key)
+        read: (key) => {
+            const data = $persistentStore.read(key);
+            try {
+                return data ? JSON.parse(data) : null;
+            } catch (e) {
+                return null;
+            }
+        },
+        write: (val, key) => {
+            try {
+                return $persistentStore.write(JSON.stringify(val), key);
+            } catch (e) {
+                return false;
+            }
+        }
     }
 };
 
 // 生成请求头
-const getHeaders = (cookie) => ({
-    'Cookie': `${COOKIE_NAME}=${cookie}`,
-    'Accept': 'application/json, */*',
-    'Accept-Language': 'zh-CN,zh',
-    'Referer': 'https://bbs.yuyingufen.com/',
-    'X-Requested-With': 'XMLHttpRequest',
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
-});
+const getHeaders = (cookies) => {
+    const cookieString = Object.entries(cookies)
+        .map(([key, value]) => `${COOKIE_PREFIX}_${key}=${value}`)
+        .join('; ');
+
+    return {
+        'Cookie': cookieString,
+        'Accept': 'application/json, */*',
+        'Accept-Language': 'zh-CN,zh',
+        'Referer': 'https://bbs.yuyingufen.com/',
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15'
+    };
+};
 
 // 签到函数
 const sign = () => {
-    const cookie = $.store.read(COOKIE_KEY);
-    if (!cookie) {
+    const cookies = $.store.read(COOKIE_KEY);
+    if (!cookies) {
         $.msg(NAME, '❌ 签到失败', '请先获取Cookie');
         return $done();
     }
 
     $httpClient.post({
         url: SIGN_URL,
-        headers: getHeaders(cookie),
+        headers: getHeaders(cookies),
         timeout: TIMEOUT
     }, (error, response, data) => {
         let subtitle = '', body = '';
@@ -61,7 +83,6 @@ const sign = () => {
             if (error) throw new Error('网络请求异常');
             
             const result = JSON.parse(data);
-            // 根据实际接口返回进行判断
             if (result.success) {
                 subtitle = '🎉 签到成功';
                 body = result.message || '签到完成';
@@ -89,16 +110,32 @@ const getCookie = () => {
     const setCookie = $response.headers['Set-Cookie'] || $response.headers['set-cookie'];
     if (!setCookie) return $done();
 
-    const match = setCookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
-    if (!match) return $done();
+    // 解析所有Cookie
+    const cookies = {};
+    let cookiesUpdated = false;
 
-    const newCookie = match[1];
-    const oldCookie = $.store.read(COOKIE_KEY);
-    
-    if (newCookie === oldCookie) {
+    REQUIRED_COOKIES.forEach(cookieName => {
+        const pattern = new RegExp(`${COOKIE_PREFIX}_${cookieName}=([^;]+)`);
+        const match = setCookie.match(pattern);
+        if (match) {
+            cookies[cookieName] = match[1];
+            cookiesUpdated = true;
+        }
+    });
+
+    if (!cookiesUpdated) {
+        return $done();
+    }
+
+    const oldCookies = $.store.read(COOKIE_KEY) || {};
+    const hasChanges = REQUIRED_COOKIES.some(
+        name => cookies[name] && cookies[name] !== oldCookies[name]
+    );
+
+    if (!hasChanges) {
         $.msg(NAME, '📢 Cookie未变化', '');
-    } else if ($.store.write(newCookie, COOKIE_KEY)) {
-        $.msg(NAME, '✅ Cookie获取成功', '');
+    } else if ($.store.write(cookies, COOKIE_KEY)) {
+        $.msg(NAME, '✅ Cookie获取成功', `成功获取 ${Object.keys(cookies).length} 个Cookie`);
     } else {
         $.msg(NAME, '❌ Cookie获取失败', '存储错误');
     }
