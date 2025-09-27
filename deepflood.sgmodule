@@ -1,0 +1,18 @@
+#!name=DeepFlood自动签到
+#!desc=DeepFlood 分站每日定时签到；打开 DeepFlood 网站的「个人账号设置」页面即可自动获取 Token（Cookie）。
+#!author=ported by ChatGPT (based on Sliverkiss original)
+#!update=2025-09-27
+#!credit=原作者 @Sliverkiss；本模块仅做域名与变量映射到 DeepFlood
+
+#!arguments=定时签到:10 0 * * *,禁用脚本:DeepFlood[Token],禁用MITM:hostname
+#!arguments-desc=定时签到：Cron 表达式，默认每天 00:10 运行\n\n禁用脚本：可临时关闭 Token 抓取脚本\n\n禁用MITM：可临时禁用 MitM 以方便排障
+
+[Script]
+# 定时签到任务（调用你的 deepflood.js）
+DeepFlood[签到] = type=cron,cronexp="{{定时签到}}",wake-system=1,timeout=60,script-path=https://gist.githubusercontent.com/RerrentLinden/91c4db5f85955ed6043829d73fc69f42/raw/deepflood.js
+
+# 抓取 Cookie/Token（访问 个人设置 -> 触发 /api/account/getInfo/:id?readme=1）
+{{禁用脚本}} = type=http-response,pattern=^https:\/\/www\.deepflood\.com\/api\/account\/getInfo\/.+\?readme=1,requires-body=true,timeout=60,script-path=https://gist.githubusercontent.com/RerrentLinden/91c4db5f85955ed6043829d73fc69f42/raw/deepflood.js
+
+[MITM]
+{{禁用MITM}} = %APPEND% www.deepflood.com
