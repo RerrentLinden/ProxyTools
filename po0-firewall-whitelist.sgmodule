@@ -1,0 +1,22 @@
+#!name=po0 防火墙自动加白
+#!desc=按当前网络为出口 IP 选择固定槽位。仅在 network-changed 事件或面板刷新时执行；支持蜂窝、有线、指定 SSID 与陌生网络槽位。
+#!category=po0
+#!author=reallinzc, modified by RerrentLinden
+#!arguments=tokens=&cellular_slot=&wired_slot=&ssid_slots=&unknown_slot=&script_path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/po0-firewall-whitelist.js
+
+# 参数：
+# - tokens: pgnfw_ token；多个用英文逗号分隔。旧的 token@槽位仍作为未配置网络槽位时的兜底。
+# - cellular_slot / wired_slot / unknown_slot: 留空表示使用 token 兜底槽位或 slotless。
+# - ssid_slots: 精确匹配，格式 Home WiFi=0|Office=1；未命中的 Wi-Fi 使用 unknown_slot。SSID 中的 & 写成 %26。
+# - script_path: 默认使用本仓库 main 分支中的配套脚本。
+
+[Rule]
+# 加白 API 必须直连，确保 API 看到的是本机真实出口 IP 而不是代理出口
+IP-CIDR,124.221.69.228/32,DIRECT,no-resolve
+
+[Script]
+po0-fw-event = type=event,event-name=network-changed,script-path=%script_path%,timeout=60,argument="tokens=%tokens%&cellular_slot=%cellular_slot%&wired_slot=%wired_slot%&ssid_slots=%ssid_slots%&unknown_slot=%unknown_slot%"
+po0-fw-panel = type=generic,script-path=%script_path%,timeout=60,argument="tokens=%tokens%&cellular_slot=%cellular_slot%&wired_slot=%wired_slot%&ssid_slots=%ssid_slots%&unknown_slot=%unknown_slot%"
+
+[Panel]
+po0-fw = script-name=po0-fw-panel,title=po0 防火墙加白,content=点击刷新,update-interval=300
