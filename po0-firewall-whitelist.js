@@ -36,6 +36,7 @@ var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> + "/add"
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
+var NOTIFICATIONS_ENABLED = true;
 
 /* ---------- 环境兼容层 ---------- */
 
@@ -55,6 +56,7 @@ function storeWrite(value, key) {
 }
 
 function notify(title, subtitle, body) {
+  if (!NOTIFICATIONS_ENABLED) return;
   if (isQX) $notify(title, subtitle, body);
   else if (typeof $notification !== "undefined") $notification.post(title, subtitle, body);
 }
@@ -163,6 +165,14 @@ function parseSlot(value, name) {
   var slot = Number(text);
   if (!isFinite(slot) || slot > 2147483647) throw new Error(name + " 超出有效范围");
   return slot;
+}
+
+function parseBoolean(value, name, defaultValue) {
+  var text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  if (text === "") return defaultValue;
+  if (text === "true") return true;
+  if (text === "false") return false;
+  throw new Error(name + " 必须是 true 或 false");
 }
 
 function parseSsidSlots(value) {
@@ -346,6 +356,7 @@ var configError = null;
 
 try {
   args = getArguments();
+  NOTIFICATIONS_ENABLED = parseBoolean(args.notify, "notify", true);
   slotConfig = parseSlotConfig(args);
   network = detectNetwork();
   networkSlot = selectNetworkSlot(network, slotConfig);
