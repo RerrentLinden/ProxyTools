@@ -3,6 +3,7 @@
 #!category=po0
 #!author=reallinzc, modified by RerrentLinden
 #!arguments=tokens:"",cellular_slot:"",wired_slot:"",ssid_slots:"",unknown_slot:""
+#!arguments-desc=tokens: pgnfw_ token，多个用英文逗号分隔，可带 @兜底槽位 | cellular_slot: 蜂窝网络槽位，留空使用 token 兜底或 slotless | wired_slot: 有线网络槽位，留空同上 | ssid_slots: 指定 Wi-Fi 槽位，格式 SSID=槽位，多个用竖线分隔 | unknown_slot: 陌生 Wi-Fi 或无法识别网络时使用的槽位，留空同上
 
 # 参数：
 # - tokens: pgnfw_ token；多个用英文逗号分隔。旧的 token@槽位仍作为未配置网络槽位时的兜底。
