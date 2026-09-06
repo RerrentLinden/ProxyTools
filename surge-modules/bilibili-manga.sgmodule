@@ -1,0 +1,13 @@
+#!name=哔哩哔哩漫画签到
+#!desc=每日签到。打开已登录的 https://manga.bilibili.com/ 获取网页登录凭据，签到与积分兑换共享账号。
+#!category=签到任务
+#!author=RerrentLinden
+#!arguments=cron:5 0 * * *,capture_script:哔哩漫画[Cookie],mitm:hostname
+#!arguments-desc=cron：签到时间，默认每天 00:05。\ncapture_script：输入 # 可关闭凭据捕获，默认为哔哩漫画[Cookie]。\nmitm：输入 # 可关闭本模块的 MITM 主机追加，默认 hostname。\n保留 BILI_COMICS_CHECKIN 中已有账号及兑换历史。
+
+[Script]
+哔哩漫画[签到] = type=cron,cronexp="{{{cron}}}",timeout=60,script-update-interval=3600,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/bilibili-manga.js,argument="action=checkin"
+{{{capture_script}}} = type=http-request,pattern=^https://(?:manga\.bilibili\.com/(?:$|\?|account(?:/|\?|$)|twirp/)|app\.bilibili\.com/x/v\d+/account/myinfo(?:\?|$)),timeout=10,script-update-interval=3600,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/bilibili-manga.js,argument="action=capture"
+
+[MITM]
+{{{mitm}}} = %APPEND% manga.bilibili.com, app.bilibili.com

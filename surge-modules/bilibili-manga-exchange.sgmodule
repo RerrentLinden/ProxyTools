@@ -1,0 +1,9 @@
+#!name=哔哩哔哩漫画积分抢购
+#!desc=共享漫画签到模块的账号。默认 dry_run=true，仅查询商品、库存和积分，不消费积分。确认商品、数量和预算后才能显式关闭模拟模式。
+#!category=签到任务
+#!author=RerrentLinden
+#!arguments=cron:0-59 0 0 * * 0-1,product_name:【超特惠】限量-0点秒杀,product_num:0,attempts:100,dry_run:true
+#!arguments-desc=cron：默认每周日、周一 00:00:00 至 00:00:59 每秒执行。\nproduct_name：商品完整名称。\nproduct_num：0 表示积分及库存允许的最大数量；正整数表示上限。\nattempts：1–100；仅明确拒绝且允许重试的响应会重试，总时限 50 秒。\ndry_run：默认 true，只查询；显式 false 才会兑换。\n结果不确定时锁定后续真实兑换，须先在网站核对交易，再按 README 恢复。
+
+[Script]
+哔哩漫画[积分抢购] = type=cron,cronexp="{{{cron}}}",timeout=60,script-update-interval=3600,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/bilibili-manga.js,argument="action=exchange&product_name={{{product_name}}}&product_num={{{product_num}}}&attempts={{{attempts}}}&dry_run={{{dry_run}}}"

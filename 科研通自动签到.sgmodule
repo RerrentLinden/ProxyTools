@@ -1,16 +1,14 @@
+# 旧安装地址的兼容入口，由 tests/sync-legacy-checkins.js 从正式模块生成。
 #!name=科研通自动签到
-#!desc=获取科研通登录Cookie并进行每日签到
+#!desc=使用已登录浏览器打开科研通主页即可获取 Cookie，每日 00:05 定时签到；适用于 Surge Mac。
+#!category=签到任务
 #!author=RerrentLinden
-#!update=2024-12-27
-#!arguments=定时签到:0 9 * * *,禁用脚本:科研通获取Cookie,禁用MITM:hostname
-#!arguments-desc=定时签到：Cron表达式，默认每天09:00执行\n\n禁用脚本：禁用Cookie获取功能，输入 # 表示禁用\n\n禁用MITM：禁用MITM主机名，输入 # 表示禁用
+#!arguments=定时签到:5 0 * * *,禁用脚本:科研通获取Cookie,禁用MITM:hostname
+#!arguments-desc=定时签到：每天 00:05 签到，可修改为其他 Cron 表达式。\n禁用脚本：捕获脚本名称，填 # 可关闭捕获。\n禁用MITM：保留 hostname；填 # 可停止本模块追加解密域名。\n保留已有 sciencehubCookie 凭据，浏览器捕获后保存完整 Cookie。
 
 [Script]
-# 定时签到任务
-科研通定时签到 = type=cron,cronexp="{{{定时签到}}}",wake-system=1,timeout=120,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/refs/heads/main/sciencehub-script.js
-
-# Cookie获取配置
-{{{禁用脚本}}} = type=http-response,pattern=^https:\/\/www\.ablesci\.com\/?$,requires-body=1,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/refs/heads/main/sciencehub-script.js
+科研通定时签到 = type=cron,cronexp="{{{定时签到}}}",timeout=30,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/sciencehub.js
+{{{禁用脚本}}} = type=http-response,pattern=^https:\/\/www\.ablesci\.com\/(?:\?|user(?:\/|\?|$)|$),requires-body=true,max-size=1048576,timeout=15,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/sciencehub.js
 
 [MITM]
 {{{禁用MITM}}} = %APPEND% www.ablesci.com

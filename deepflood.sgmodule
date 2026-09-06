@@ -1,19 +1,14 @@
-
+# 旧安装地址的兼容入口，由 tests/sync-legacy-checkins.js 从正式模块生成。
 #!name=DeepFlood自动签到
-#!desc=每日定时签到，模块参数可调整签到时间。\n打开DeepFlood网站「个人账号设置」页面即可获取token。
-#!author=@Sliverkiss (Modified for DeepFlood)
-#!update=2024-12-26
-#!credit=基于@Sliverkiss NodeSeek原创脚本修改，由Claude优化模块可读性
-
+#!desc=每日定时签到。使用已登录浏览器打开 DeepFlood「个人账号设置」获取 Cookie；适用于 Surge Mac。
+#!category=签到任务
+#!author=RerrentLinden
 #!arguments=定时签到:5 0 * * *,禁用脚本:DeepFlood[Token],禁用MITM:hostname
-#!arguments-desc=定时签到：Cron表达式，默认每天 00:05 执行，可自定义修改\n\n禁用脚本：禁用获取Token功能，输入 # 表示禁用\n\n禁用MITM：禁用MITM主机名，输入 # 表示禁用\n\n脚本来源：请上传到您的个人Gist并替换URL
+#!arguments-desc=定时签到：每天 00:05 签到，可修改为其他 Cron 表达式。\n禁用脚本：捕获脚本名称，填 # 可关闭捕获。\n禁用MITM：保留 hostname；填 # 可停止本模块追加解密域名。\n凭据仅保存在 Surge，不写入日志。
 
 [Script]
-# 定时签到任务
-DeepFlood[签到] = type=cron,cronexp="{{{定时签到}}}",wake-system=1,timeout=180,script-path=https://gist.github.com/RerrentLinden/91c4db5f85955ed6043829d73fc69f42/raw/deepflood.js
-
-# Token获取配置 (可通过参数禁用)
-{{{禁用脚本}}} = type=http-response,pattern=^https:\/\/www\.deepflood\.com\/api\/account\/getInfo\/(.+)phone=1,script-path=https://gist.github.com/RerrentLinden/91c4db5f85955ed6043829d73fc69f42/raw/deepflood.js,requires-body=true,timeout=60
+DeepFlood签到 = type=cron,cronexp="{{{定时签到}}}",timeout=180,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/seek-checkin.js,argument="site=deepflood"
+{{{禁用脚本}}} = type=http-response,pattern=^https:\/\/www\.deepflood\.com\/api\/account\/getInfo\/[1-9]\d*\?,requires-body=true,max-size=262144,timeout=15,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/seek-checkin.js,argument="site=deepflood"
 
 [MITM]
 {{{禁用MITM}}} = %APPEND% www.deepflood.com
