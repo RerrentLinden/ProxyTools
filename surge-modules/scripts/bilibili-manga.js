@@ -9,13 +9,19 @@
   const LOCK_KEY = 'BILI_COMICS_EXCHANGE_LOCK';
   const ORIGIN = 'https://manga.bilibili.com';
   const DEADLINE = Date.now() + 50000;
-  const notices = [];
   let finished = false;
   let lease = '';
+  let action = typeof $request !== 'undefined' ? 'capture' : 'checkin';
 
-  function report(message) {
-    console.log(message);
-    notices.push(message);
+  function report(status, body, accountNumber) {
+    const subtitle = status + (accountNumber ? ' · 账号 ' + accountNumber : '');
+    console.log('哔哩哔哩漫画：' + subtitle + '\n' + body);
+    try { $notification.post('哔哩哔哩漫画', subtitle, body); }
+    catch (_) { console.log('哔哩哔哩漫画：通知发送失败'); }
+  }
+
+  function failureStatus() {
+    return action === 'capture' ? 'Cookie 更新失败' : action === 'exchange' ? '兑换失败' : '签到失败';
   }
 
   function fail(message, retryable) {
@@ -125,7 +131,7 @@
       if (appRequest && access) account.access_key = access[1];
       if (agent && !/[\r\n]/.test(agent)) account.userAgent = agent;
     });
-    if (changed) report('登录凭据已保存，签到和积分兑换可共用此账号。');
+    if (changed) report('Cookie 更新成功', '后续签到和积分兑换将使用最新登录信息', Object.keys(readData().account).indexOf(uid) + 1);
   }
 
   function today() {
@@ -213,12 +219,22 @@
     }
   }
 
+  async function balanceText(account) {
+    try {
+      const balance = await query(account, 'GetUserPoint');
+      const point = balance && balance.point;
+      if (!/^-?\d+$/.test(String(point)) || !Number.isSafeInteger(Number(point))) throw fail('积分余额格式异常。');
+      return '当前余额：' + Number(point) + ' 积分';
+    } catch (_) {
+      return '当前余额：查询失败';
+    }
+  }
+
   async function checkin(account) {
     // 该 API 要求 platform=ios；Surge Mac 实测拒绝 web，与脚本运行系统无关。
     const result = await request(account, '/twirp/activity.v1.Activity/ClockIn?platform=ios', {});
-    if (result.code === 0) return '签到成功。';
-    if (result.code === 1) return '今日已签到。';
-    throw fail('签到失败（业务代码 ' + result.code + '）。');
+    if (result.code !== 0 && result.code !== 1) throw fail('签到失败（业务代码 ' + result.code + '）。');
+    return { status: result.code === 0 ? '签到成功' : '今日已签到', body: await balanceText(account) };
   }
 
   function exchangeOptions(args, data) {
@@ -240,9 +256,9 @@
   async function exchange(uid, account, options) {
     const date = today();
     if (!options.dryRun) {
-      if (account.exchangePending) return '存在待确认的兑换结果，已停止真实兑换；请先在网站核对交易。';
-      if (account.lastSuccessDate === date) return '今日已兑换成功，跳过真实兑换。';
-      if (account.lastInsufficientDate === date) return '今日已记录积分不足，跳过真实兑换。';
+      if (account.exchangePending) return { status: '兑换未执行', body: '原因：存在待确认的兑换结果，请先在网站核对交易' };
+      if (account.lastSuccessDate === date) return { status: '兑换未执行', body: '原因：今日已兑换成功，跳过真实兑换' };
+      if (account.lastInsufficientDate === date) return { status: '兑换未执行', body: '原因：今日已记录积分不足，跳过真实兑换' };
     }
     const products = await query(account, 'ListProduct');
     if (!Array.isArray(products)) throw fail('商品列表结构异常。');
@@ -250,7 +266,7 @@
     if (!isObject(balance)) throw fail('积分响应结构异常。');
     const points = nonnegative(balance.point, '积分');
     const product = products.find(function (item) { return isObject(item) && item.title === options.name; });
-    if (!product) return (options.dryRun ? '模拟查询完成：' : '') + '目标商品未上架；当前积分 ' + points + '。';
+    if (!product) return { status: options.dryRun ? '试运行完成' : '兑换未执行', body: '当前余额：' + points + ' 积分\n原因：目标商品未上架' };
     const cost = nonnegative(product.real_cost, '商品积分价格');
     const stock = nonnegative(product.remain_amount, '商品库存');
     const id = nonnegative(product.id, '商品 ID');
@@ -258,12 +274,12 @@
     const affordable = cost === 0 ? stock : Math.floor(points / cost);
     const count = Math.min(options.number || affordable, affordable, stock);
     if (!Number.isSafeInteger(count * cost)) throw fail('积分总成本超过安全整数范围。');
-    const detail = '当前积分 ' + points + '；库存 ' + stock + '；单价 ' + cost + '；计划数量 ' + count + '；总积分 ' + count * cost + '。';
-    if (options.dryRun) return '模拟查询完成，未兑换：' + detail;
-    if (!stock) return '商品库存为零，未兑换。';
+    const detail = '当前余额：' + points + ' 积分\n商品库存：' + stock + '\n商品单价：' + cost + ' 积分\n计划数量：' + count + '\n计划消耗：' + count * cost + ' 积分';
+    if (options.dryRun) return { status: '试运行完成', body: detail + '\n执行模式：只读，不兑换' };
+    if (!stock) return { status: '兑换未执行', body: '当前余额：' + points + ' 积分\n原因：商品库存为零' };
     if (!affordable) {
       updateAccount(uid, function (current) { current.lastInsufficientDate = date; });
-      return '积分不足，未兑换。';
+      return { status: '兑换未执行', body: '当前余额：' + points + ' 积分\n原因：积分不足' };
     }
     const transaction = { date: date, productId: id, quantity: count, points: count * cost, startedAt: Date.now(), state: 'pending' };
     for (let attempt = 0; attempt < options.attempts; attempt++) {
@@ -282,7 +298,7 @@
           delete current.exchangePending;
           delete current.lastInsufficientDate;
         });
-        return '兑换成功：数量 ' + count + '，消耗积分 ' + count * cost + '。';
+        return { status: '兑换成功', body: await balanceText(account) + '\n本次兑换：' + count + '\n本次消耗：' + count * cost + ' 积分' };
       }
       // 明确的业务拒绝无需保留未决交易；仅明确限流/未开始消息允许有界重试。
       updateAccount(uid, function (current) { delete current.exchangePending; });
@@ -296,7 +312,7 @@
 
   async function main() {
     const args = parseArguments();
-    const action = args.action || (typeof $request !== 'undefined' ? 'capture' : 'checkin');
+    action = args.action || action;
     if (action === 'capture') return capture();
     if (action !== 'checkin' && action !== 'exchange') throw fail('不支持的 action 参数。');
     const data = readData();
@@ -305,24 +321,22 @@
     if (!ids.length) throw fail('尚无登录凭据，请打开已登录的漫画网页。');
     if (options && !options.dryRun) acquireLease();
     for (let index = 0; index < ids.length; index++) {
-      if (Date.now() >= DEADLINE) { report('已达到 50 秒总执行时限，剩余账号未执行。'); break; }
+      if (Date.now() >= DEADLINE) { report(failureStatus(), '原因：已达到 50 秒总执行时限，剩余账号未执行', index + 1); break; }
       try {
         const account = readData().account[ids[index]];
         if (!isObject(account) || (!cookies(account.cookie).SESSDATA && !account.access_key)) throw fail('登录凭据缺失；保留原账号，请重新捕获。');
         const result = action === 'checkin' ? await checkin(account) : await exchange(ids[index], account, options);
-        report('账号 ' + (index + 1) + '：' + result);
-      } catch (error) { report('账号 ' + (index + 1) + '：' + (error.safeMessage || '执行失败，未输出响应或凭据。')); }
+        report(result.status, result.body, index + 1);
+      } catch (error) { report(failureStatus(), '原因：' + (error.safeMessage || '脚本执行失败'), index + 1); }
     }
   }
 
   Promise.resolve().then(main).catch(function (error) {
-    report(error.safeMessage || '脚本执行异常，未输出响应或凭据。');
+    report(failureStatus(), '原因：' + (error.safeMessage || '脚本执行异常'));
   }).finally(function () {
     if (finished) return;
     finished = true;
     releaseLease();
-    try {
-      if (notices.length) $notification.post('哔哩哔哩漫画', '', notices.join('\n'));
-    } finally { $done({}); }
+    $done({});
   });
 })();

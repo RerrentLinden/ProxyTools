@@ -22,10 +22,12 @@
     return error;
   }
 
-  function report(subtitle, message) {
+  function report(status, message, accountNumber) {
     const name = site ? site.name : "Seek 签到";
-    console.log(name + "：" + subtitle + "；" + message);
-    $notification.post(name, subtitle, message);
+    const subtitle = status + (accountNumber ? " · 账号 " + accountNumber : "");
+    console.log(name + "：" + subtitle + "\n" + message);
+    try { $notification.post(name, subtitle, message); }
+    catch (_) { console.log(name + "：通知发送失败"); }
   }
 
   function finish() {
@@ -129,7 +131,7 @@
         }
       }
       const origin = "https://" + site.host;
-      // 与官网 fetch(url, {method: 'POST'}) 保持一致：不添加正文或表单头。
+      // 空正文 POST 不加表单 Content-Type，但保留浏览器会发送的同源 Origin。
       const headers = {
         Cookie: account.token,
         "User-Agent": account.userAgent,
@@ -139,6 +141,7 @@
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty"
       };
+      if (method === "post") headers.Origin = origin;
       try {
         $httpClient[method]({
           url: origin + path,
@@ -156,8 +159,10 @@
   }
 
   function readTodayRecord(data, account) {
+    // 未签到时站点同时返回空记录、空排名；只有已有记录才要求整数排名。
+    const validOrder = Number.isSafeInteger(data.order) || (data.record === null && data.order === null);
     if (!Object.prototype.hasOwnProperty.call(data, "record") || !Array.isArray(data.list) ||
-        !Number.isSafeInteger(data.order) || !Number.isSafeInteger(data.total) || data.total < 0 || data.success === false) {
+        !validOrder || !Number.isSafeInteger(data.total) || data.total < 0 || data.success === false) {
       throw fail("签到状态响应格式异常，未发起领奖请求。");
     }
     if (data.record === null) return null;
@@ -174,6 +179,18 @@
     }
     // record 的今日语义由服务器 board 接口定义，不将 day_id 换算为本机日期。
     return record;
+  }
+
+  async function balanceText(account, current) {
+    if (Number.isSafeInteger(current)) return "当前余额：" + current + " 鸡腿";
+    try {
+      const data = await requestApi(account, "get", "/api/account/getInfo/" + account.userId + "?readme=1");
+      if (data.success !== true || !data.detail || String(data.detail.member_id) !== String(account.userId) ||
+          !Number.isSafeInteger(data.detail.coin)) throw fail("余额响应无效。");
+      return "当前余额：" + data.detail.coin + " 鸡腿";
+    } catch (_) {
+      return "当前余额：查询失败";
+    }
   }
 
   function capture() {
@@ -210,7 +227,7 @@
     if (index >= 0) accounts[index] = updated;
     else accounts.push(updated);
     if (!$persistentStore.write(JSON.stringify(accounts), site.key)) throw fail("凭据保存失败，请检查 Surge 持久化存储。");
-    report("凭据已更新", "已保存当前账号的 Cookie；现有其他账号和附加字段保持不变。");
+    report("Cookie 更新成功", "后续签到将使用最新登录信息", index >= 0 ? index + 1 : accounts.length);
   }
 
   async function checkin(parameters) {
@@ -225,10 +242,9 @@
     if (!accounts.length) throw fail("缺少账号，请在已登录浏览器打开个人账号设置获取凭据。");
     for (let index = 0; index < accounts.length; index++) {
       if (Date.now() - startedAt >= totalBudgetMs - 1000) {
-        report("达到运行时限", "剩余 " + (accounts.length - index) + " 个账号未执行，请稍后重试。");
+        report("签到失败", "原因：达到运行时限，剩余 " + (accounts.length - index) + " 个账号未执行", index + 1);
         break;
       }
-      const label = "账号 " + (index + 1);
       const account = accounts[index];
       try {
         if (!account || !isId(account.userId) || !validHeader(account.token)) throw fail("账号记录缺少有效身份或 Cookie，请重新捕获。");
@@ -236,25 +252,28 @@
         const board = await requestApi(account, "get", "/api/attendance/board?page=1");
         const record = readTodayRecord(board, account);
         if (record !== null) {
-          report(label + "：今日已签到", "服务器今日记录确认已领取 " + record.gain + " 个鸡腿。");
+          report("今日已签到", await balanceText(account) + "\n今日获得：" + record.gain + " 鸡腿", index + 1);
           continue;
         }
         const data = await requestApi(account, "post", "/api/attendance?random=" + (mode === "random" ? "true" : "false"));
         const message = typeof data.message === "string" ? data.message : "";
         if (/(?:今日|今天).{0,12}已.{0,8}签|已经签|已签到|重复签到|already.{0,20}(?:check|sign|attend)/i.test(message)) {
-          report(label + "：今日已签到", "服务器确认今日奖励已领取。");
+          report("今日已签到", await balanceText(account, data.current), index + 1);
         } else if (data.success === true && (
           /^今天的签到收益是\d+个鸡腿[。！!]?$/u.test(message) ||
           /签到成功|成功签到|获得.{0,12}(?:鸡腿|硬币|积分)|check.?in.{0,10}success|success.{0,10}check.?in/i.test(message) ||
           (Number.isSafeInteger(data.gain) && data.gain >= 0 && Number.isSafeInteger(data.current) && data.current >= 0))) {
-          report(label + "：签到成功", "服务器确认奖励领取成功；模式：" + (mode === "random" ? "随机" : "固定") + "。");
+          const lines = [await balanceText(account, data.current)];
+          if (Number.isSafeInteger(data.gain) && data.gain >= 0) lines.push("本次获得：" + data.gain + " 鸡腿");
+          lines.push("奖励模式：" + (mode === "random" ? "随机" : "固定"));
+          report("签到成功", lines.join("\n"), index + 1);
         } else if (data.success === false) {
           throw fail("服务器未确认签到成功，请在网站检查账号状态。");
         } else {
           throw fail("响应格式异常，缺少明确的签到业务结果。");
         }
       } catch (error) {
-        report(label + "：签到失败", error && error.isCheckinError ? error.message : "脚本执行异常；凭据未写入日志。");
+        report("签到失败", "原因：" + (error && error.isCheckinError ? error.message : "脚本执行异常"), index + 1);
       }
     }
   }
@@ -266,6 +285,6 @@
     if (typeof $request !== "undefined") capture();
     else await checkin(parameters);
   })().catch(function (error) {
-    report("执行失败", error && error.isCheckinError ? error.message : "脚本执行异常；凭据未写入日志。");
+    report(typeof $request !== "undefined" ? "Cookie 更新失败" : "签到失败", "原因：" + (error && error.isCheckinError ? error.message : "脚本执行异常"));
   }).finally(finish);
 })();

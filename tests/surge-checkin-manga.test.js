@@ -33,6 +33,32 @@ function shop(options = {}) {
   };
 }
 
+test('成功和已签到通知均查询实际漫画积分，零积分也准确显示', async () => {
+  for (const [code, point] of [[0, '125'], [1, '0']]) {
+    const result = await runScript(filename, {
+      store: stored(),
+      http: (_method, request) => ({ body: request.url.endsWith('/GetUserPoint')
+        ? { code: 0, data: { point } } : { code, msg: code === 1 ? '不能重复签到~' : '' } }),
+    });
+    verifyFinished(result);
+    assert.match(textOf(result), new RegExp('当前余额：' + point));
+    assert.equal(result.requests.length, 2);
+    assert.equal(exchanges(result).length, 0);
+  }
+});
+
+test('漫画余额无效时保留签到结果，不显示虚构余额', async () => {
+  const result = await runScript(filename, {
+    store: stored(),
+    http: (_method, request) => ({ body: request.url.endsWith('/GetUserPoint')
+      ? { code: 0, data: { point: null } } : { code: 0 } }),
+  });
+  verifyFinished(result);
+  assert.match(textOf(result), /签到成功/);
+  assert.match(textOf(result), /当前余额：查询失败/);
+  assert.doesNotMatch(textOf(result), /当前余额：0/);
+});
+
 test('网页登录请求捕获必要 Cookie，不要求 x-bili-mid，并保留账号和兑换历史', async () => {
   const other = { cookie: 'SESSDATA=another-synthetic', lastSuccessDate: '2026-09-05' };
   const store = stored({ cookie: 'SESSDATA=old-synthetic', lastSuccessDate: '2026-09-05', access_key: 'legacy-synthetic', custom: 7 });
@@ -56,7 +82,7 @@ test('网页登录请求捕获必要 Cookie，不要求 x-bili-mid，并保留�
   assert.deepEqual(data.unrelated, initial.unrelated);
   assert.equal(data.ProductNum, 3);
   assert.equal(result.requests.length, 0);
-  assert.match(textOf(result), /登录凭据已保存/);
+  assert.match(textOf(result), /Cookie 更新成功/);
 });
 
 test('非本站、无 UID、无 SESSDATA 和畸形 Cookie 不覆盖凭据', async () => {
@@ -86,10 +112,11 @@ test('旧 App access_key 捕获可用，稀疏 Cookie 不覆盖已有完整凭�
 });
 
 test('签到校验业务状态，使用秒级超时且不转发重定向', async () => {
-  const result = await runScript(filename, { store: stored({ userAgent: 'Synthetic Browser' }), http: () => ({ body: { code: 0 } }) });
+  const result = await runScript(filename, { store: stored({ userAgent: 'Synthetic Browser' }), http: (_method, request) => ({ body: request.url.endsWith('/GetUserPoint') ? { code: 0, data: { point: '55' } } : { code: 0 } }) });
   verifyFinished(result);
   assert.match(textOf(result), /签到成功/);
-  assert.equal(result.requests.length, 1);
+  assert.match(textOf(result), /当前余额：55/);
+  assert.equal(result.requests.length, 2);
   const request = result.requests[0];
   assert.match(request.url, /activity\.v1\.Activity\/ClockIn\?platform=ios$/);
   assert.equal(request.method, 'post');
@@ -157,8 +184,8 @@ test('多账号独立执行，失败账号不会被删除', async () => {
   const before = store[key];
   const result = await runScript(filename, { store, http: (_method, request) => ({ body: { code: request.headers.Cookie === cookie ? 0 : -101 } }) });
   verifyFinished(result);
-  assert.match(textOf(result), /账号 1：签到成功/);
-  assert.match(textOf(result), /账号 2：登录失效/);
+  assert.match(textOf(result), /签到成功 · 账号 1/);
+  assert.match(textOf(result), /签到失败 · 账号 2[\s\S]*原因：登录失效/);
   assert.equal(store[key], before);
 });
 
@@ -170,7 +197,7 @@ test('兑换默认模拟，查询商品和积分但绝不调用 Exchange 或修�
   assert.equal(result.requests.length, 2);
   assert.equal(exchanges(result).length, 0);
   assert.equal(store[key], before);
-  assert.match(textOf(result), /模拟查询完成，未兑换.*当前积分 1050.*库存 8.*单价 100.*计划数量 8.*总积分 800/);
+  assert.match(textOf(result), /试运行完成[\s\S]*当前余额：1050 积分[\s\S]*商品库存：8[\s\S]*商品单价：100 积分[\s\S]*计划数量：8[\s\S]*计划消耗：800 积分/);
 });
 
 test('售罄和未上架商品仍查询积分，模拟模式不写入积分不足状态', async () => {
@@ -182,7 +209,7 @@ test('售罄和未上架商品仍查询积分，模拟模式不写入积分不�
     assert.equal(result.requests.length, 2);
     assert.equal(exchanges(result).length, 0);
     assert.equal(store[key], before);
-    assert.match(textOf(result), /当前积分 0/);
+    assert.match(textOf(result), /当前余额：0 积分/);
   }
 });
 
@@ -216,11 +243,11 @@ test('旧参数与根存储设置兼容，显式数量零保留最大值语义',
   for (const argument of ['action=exchange&ProductNum=2&ExchangeNum=3&ProductName=fixture', '{"action":"exchange","product_num":2,"attempts":3,"product_name":"fixture","dry_run":true}']) {
     const result = await runScript(filename, { store: stored(), argument, http: shop({ products: [{ ...defaultProduct, title: 'fixture' }] }) });
     verifyFinished(result);
-    assert.match(textOf(result), /计划数量 2/);
+    assert.match(textOf(result), /计划数量：2/);
   }
   const result = await runScript(filename, { store: stored({}, { ProductNum: '3', ExchangeNum: '2', ProductName: 'fixture' }), argument: 'action=exchange&product_num=0', http: shop({ products: [{ ...defaultProduct, title: 'fixture' }] }) });
   verifyFinished(result);
-  assert.match(textOf(result), /计划数量 8/);
+  assert.match(textOf(result), /计划数量：8/);
 });
 
 test('商城只读查询最多尝试两次', async () => {
@@ -285,7 +312,7 @@ test('成功兑换记录一次，保留其他账号、旧配置和捕获期间�
   const again = await runScript(filename, { store, argument: 'action=exchange&dry_run=false', http: shop(), now: fixedNow });
   verifyFinished(again);
   assert.equal(exchanges(again).filter((request) => request.headers.Cookie === cookie).length, 0);
-  assert.match(textOf(again), /账号 1：今日已兑换成功/);
+  assert.match(textOf(again), /兑换未执行 · 账号 1[\s\S]*今日已兑换成功/);
 });
 
 test('交易网络失败、HTTP错误及未知响应保存待确认状态，不重试也不在下个 cron 重发', async () => {

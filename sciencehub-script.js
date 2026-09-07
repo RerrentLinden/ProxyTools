@@ -22,8 +22,10 @@
   }
 
   function report(subtitle, body) {
-    console.log(name + "：" + subtitle + "；" + body);
-    $notification.post(name, subtitle, body);
+    const status = subtitle + " · 账号 1";
+    console.log(name + "：" + status + "\n" + body);
+    try { $notification.post(name, status, body); }
+    catch (_) { console.log(name + "：通知发送失败"); }
   }
 
   function header(headers, name) {
@@ -80,7 +82,7 @@
     if (validHeader(userAgent) && $persistentStore.read(userAgentKey) !== userAgent && !$persistentStore.write(userAgent, userAgentKey)) {
       throw fail("浏览器信息保存失败，请重新打开主页。");
     }
-    if (previous !== identity || previousHeader !== cookie) report("凭据已保存", "已从正常浏览器请求获取 Cookie，下一次签到将核验登录状态。");
+    if (previous !== identity || previousHeader !== cookie) report("Cookie 更新成功", "后续签到将使用最新登录信息");
   }
 
   function readCookie() {
@@ -95,12 +97,13 @@
     return identityName + "=" + identity;
   }
 
-  function requestSign(cookie) {
+  function requestPage(cookie, path) {
+    const timeout = path === "/" ? 8 : requestTimeoutSeconds;
     return new Promise(function (resolve, reject) {
       let settled = false;
       const timer = setTimeout(function () {
-        settle(fail("网络请求超时；签到结果未知，本次不自动重试。"));
-      }, requestTimeoutSeconds * 1000);
+        settle(fail("网络请求超时；本次不自动重试。"));
+      }, timeout * 1000);
       function settle(error, response, body) {
         if (settled) return;
         settled = true;
@@ -110,14 +113,14 @@
       }
       const headers = {
         Cookie: cookie,
-        Accept: "application/json, */*",
-        Referer: origin + "/",
-        "X-Requested-With": "XMLHttpRequest"
+        Accept: path === "/" ? "text/html" : "application/json, */*",
+        Referer: origin + "/"
       };
+      if (path !== "/") headers["X-Requested-With"] = "XMLHttpRequest";
       const userAgent = $persistentStore.read(userAgentKey);
       if (validHeader(userAgent)) headers["User-Agent"] = userAgent;
       try {
-        $httpClient.get({ url: origin + "/user/sign", headers: headers, timeout: requestTimeoutSeconds, "auto-redirect": false }, function (error, response, body) {
+        $httpClient.get({ url: origin + path, headers: headers, timeout: timeout, "auto-redirect": false, "auto-cookie": false }, function (error, response, body) {
           settle(error ? fail("网络请求失败；签到结果未知，本次不自动重试。") : null, response, body);
         });
       } catch (_) {
@@ -126,8 +129,23 @@
     });
   }
 
+  async function balanceText(cookie) {
+    try {
+      const result = await requestPage(cookie, "/");
+      const page = inspectResponse(result.response, result.body);
+      const match = /<cite\b[^>]*\bid=["']user-point-now["'][^>]*>\s*(-?[\d,]+)\s*<\/cite>/i.exec(page);
+      if (!match || !/^-?(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(match[1])) throw fail("积分余额格式异常。");
+      const points = Number(match[1].replace(/,/g, ""));
+      if (!Number.isSafeInteger(points)) throw fail("积分余额无效。");
+      return "当前余额：" + points + " 积分";
+    } catch (_) {
+      return "当前余额：查询失败";
+    }
+  }
+
   async function checkin() {
-    const result = await requestSign(readCookie());
+    const cookie = readCookie();
+    const result = await requestPage(cookie, "/user/sign");
     const body = inspectResponse(result.response, result.body);
     let data;
     try { data = JSON.parse(body); } catch (_) {
@@ -141,7 +159,7 @@
       throw fail("登录失效，请重新登录科研通并打开主页。");
     }
     if (data.code === 1 && /(?:今日|今天).{0,12}已(?:于\s*\[?\d{2}:\d{2}:\d{2}\]?\s*|.{0,8})签|已经签|已签到|重复签到|already.{0,20}(?:check|sign)/i.test(message)) {
-      report("今日已签到", "服务器确认今日奖励已领取。");
+      report("今日已签到", await balanceText(cookie));
     } else if (data.code === 0) {
       const detail = data.data;
       if (!detail || !/^(?:0|[1-9]\d*)$/.test(String(detail.signpoint)) ||
@@ -149,7 +167,7 @@
           !Number.isSafeInteger(Number(detail.signpoint)) || !Number.isSafeInteger(Number(detail.signcount))) {
         throw fail("响应格式异常，签到结果缺少有效的积分或连续签到天数。");
       }
-      report("签到成功", "获得 " + Number(detail.signpoint) + " 积分，已连续签到 " + Number(detail.signcount) + " 天。");
+      report("签到成功", await balanceText(cookie) + "\n本次获得：" + Number(detail.signpoint) + " 积分\n连续签到：" + Number(detail.signcount) + " 天");
     } else {
       throw fail("服务器未确认签到成功，请在网站检查账号状态。");
     }
@@ -159,7 +177,7 @@
     if (typeof $request !== "undefined") capture();
     else await checkin();
   })().catch(function (error) {
-    report("执行失败", error && error.isCheckinError ? error.message : "脚本执行异常；凭据未写入日志。");
+    report(typeof $request !== "undefined" ? "Cookie 更新失败" : "签到失败", "原因：" + (error && error.isCheckinError ? error.message : "脚本执行异常"));
   }).finally(function () {
     if (!finished) {
       finished = true;

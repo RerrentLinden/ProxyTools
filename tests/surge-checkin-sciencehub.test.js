@@ -16,7 +16,9 @@ function output(result) {
 }
 
 function cron(response, extra = {}) {
-  return runScript(script, { store: { sciencehubCookie: identity }, http: () => response, ...extra });
+  return runScript(script, { store: { sciencehubCookie: identity },
+    http: (_method, request) => request.url.endsWith("/user/sign") ? response
+      : { body: '<html><cite id="user-point-now">5002</cite></html>' }, ...extra });
 }
 
 function captureOptions(extra = {}) {
@@ -27,6 +29,28 @@ function captureOptions(extra = {}) {
   };
 }
 
+test("成功和已签到通知均显示主页的实际积分余额", async () => {
+  for (const sign of [{ code: 0, data: { signpoint: 0, signcount: 2 } }, { code: 1, msg: "今天已签到" }]) {
+    const result = await cron(null, {
+      http: (_method, request) => ({ body: request.url.endsWith("/user/sign") ? sign
+        : '<html><cite class="points" id="user-point-now">5,002</cite></html>' }),
+    });
+    assert.match(output(result), /当前余额：5002/);
+    assert.equal(result.requests.length, 2);
+    assert.equal(result.notifications.length, 1);
+  }
+});
+
+test("余额查询失败保留已完成状态，不把缺失值当作零积分", async () => {
+  const result = await cron(null, {
+    http: (_method, request) => request.url.endsWith("/user/sign")
+      ? { body: { code: 1, msg: "今天已签到" } } : { status: 403, body: "Forbidden" },
+  });
+  assert.match(output(result), /今日已签到/);
+  assert.match(output(result), /当前余额：查询失败/);
+  assert.doesNotMatch(output(result), /当前余额：0/);
+});
+
 test("Surge 不提供 clearTimeout 时网络成功和失败都结束一次", async () => {
   for (const [response, expected] of [
     [{ body: { code: 0, data: { signpoint: 10, signcount: 3 } } }, /签到成功/],
@@ -34,14 +58,14 @@ test("Surge 不提供 clearTimeout 时网络成功和失败都结束一次", asy
   ]) {
     const result = await cron(response, { omitClearTimeout: true });
     assert.match(output(result), expected);
-    assert.equal(result.requests.length, 1);
+    assert.equal(result.requests.length, response.error ? 1 : 2);
   }
 });
 
 test("正常主页请求捕获 Cookie，无需响应 Set-Cookie，并保留旧 identity 格式", async () => {
   const store = { unrelated: "preserved" };
   const result = await runScript(script, captureOptions({ store }));
-  assert.match(output(result), /凭据已保存/);
+  assert.match(output(result), /Cookie 更新成功/);
   assert.equal(store.sciencehubCookie, identity);
   assert.equal(store.sciencehubCookieHeader, fullCookie);
   assert.equal(store.sciencehubUserAgent, "SyntheticBrowser/1");
@@ -79,8 +103,9 @@ test("错误域名、缺失 identity、登录页与验证拦截都保留旧凭�
 test("旧裸值凭据可直接签到，HTTP 超时单位为秒且关闭自动重定向", async () => {
   const result = await cron({ body: { code: 0, data: { signpoint: 10, signcount: 3 } } });
   assert.match(output(result), /签到成功/);
-  assert.match(output(result), /获得 10 积分/);
-  assert.equal(result.requests.length, 1);
+  assert.match(output(result), /本次获得：10 积分/);
+  assert.match(output(result), /当前余额：5002/);
+  assert.equal(result.requests.length, 2);
   const request = result.requests[0];
   assert.equal(request.method, "get");
   assert.equal(request.url, "https://www.ablesci.com/user/sign");
@@ -110,7 +135,7 @@ test("code 1 只有明确已签到文案才判定重复，不把业务错误或�
   for (const [msg, expected] of [["您今天已经签到过了", /今日已签到/], ["签到失败，您今天已于 [00:04:58] 签到。", /今日已签到/], ["请先登录", /登录失效/], ["请求异常", /未确认签到成功/]]) {
     const result = await cron({ status: 200, body: { code: 1, msg } });
     assert.match(output(result), expected);
-    assert.equal(result.requests.length, 1);
+    assert.equal(result.requests.length, expected.source === "今日已签到" ? 2 : 1);
   }
 });
 
@@ -118,7 +143,7 @@ test("空 JSON、缺少积分字段、异常天数与 HTML 不被当作签到成
   for (const body of [{}, { code: 0 }, { code: 0, data: {} }, { code: 0, data: { signpoint: null, signcount: 2 } }, { code: 0, data: { signpoint: false, signcount: true } }, { code: 0, data: { signpoint: 1, signcount: 0 } }, "<html>普通页面</html>", "null"]) {
     const result = await cron({ status: 200, body });
     const text = output(result);
-    assert.match(text, /执行失败/);
+    assert.match(text, /签到失败/);
     assert.equal(result.requests.length, 1);
   }
 });
@@ -126,7 +151,7 @@ test("空 JSON、缺少积分字段、异常天数与 HTML 不被当作签到成
 test("缺少 Cookie 或包含换行的凭据不发起请求", async () => {
   for (const store of [{}, { sciencehubCookie: "" }, { sciencehubCookie: "deleted" }, { sciencehubCookie: "bad\r\nheader" }]) {
     const result = await runScript(script, { store });
-    assert.match(output(result), /执行失败/);
+    assert.match(output(result), /签到失败/);
     assert.equal(result.requests.length, 0);
   }
 });

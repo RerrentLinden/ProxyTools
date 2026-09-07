@@ -42,13 +42,46 @@ function checkResult(result) {
   }
 }
 
+test("直接从已确认任务页显示金币银币铜币，不额外请求余额接口", async () => {
+  const balance = '<a href="/balance" class="balance_area">1 <img alt="G" />57 <img alt="S" />47 <img alt="B" /></a>';
+  const result = await runScript(SCRIPT, { store: store(), http: () => ({ body: DONE + balance }) });
+  checkResult(result);
+  assert.match(output(result), /当前余额：1 金币，57 银币，47 铜币/);
+  assert.equal(result.requests.length, 1);
+});
+
+test("领取成功使用最后一次核验页的新余额", async () => {
+  const oldBalance = '<a href="/balance" class="balance_area">10 <img alt="B" /></a>';
+  const newBalance = '<a href="/balance" class="balance_area">20 <img alt="B" /></a>';
+  const result = await runScript(SCRIPT, {
+    store: store(),
+    http: (_method, _request, index) => ({ body: index === 0 ? pending() + oldBalance : index === 1 ? DONE : DONE + newBalance }),
+  });
+  checkResult(result);
+  assert.match(output(result), /签到成功/);
+  assert.match(output(result), /当前余额：20 铜币/);
+  assert.doesNotMatch(output(result), /当前余额：10 铜币/);
+  assert.equal(result.requests.length, 3);
+});
+
+test("V2EX 真正的零余额与缺失余额区分显示", async () => {
+  for (const [page, expected] of [
+    [DONE + '<a class="balance_area" href="/balance">0 <img alt="B" /></a>', /当前余额：0 铜币/],
+    [DONE, /当前余额：查询失败/],
+  ]) {
+    const result = await runScript(SCRIPT, { store: store(), http: () => ({ body: page }) });
+    checkResult(result);
+    assert.match(output(result), expected);
+  }
+});
+
 test("通知 API 抛出异常仍只结束一次，已领取结果不受影响且不泄露底层错误", async () => {
   const result = await runScript(SCRIPT, {
     store: store(), http: () => ({ body: DONE }),
     notificationError: COOKIE,
   });
   assert.equal(result.requests.length, 1);
-  assert.match(output(result), /今日已完成/);
+  assert.match(output(result), /今日已签到/);
   assert.equal(result.notifications.length, 0);
   checkResult(result);
 });
@@ -66,7 +99,7 @@ test("捕获普通 GET 请求的 Cookie 和对应 User-Agent，保留其他存�
   assert.deepEqual(JSON.parse(result.store.V2EX_CHECKIN), CREDENTIALS);
   assert.equal(result.store.unrelated, "保留");
   assert.equal(result.requests.length, 0);
-  assert.match(output(result), /凭据已更新/);
+  assert.match(output(result), /Cookie 更新成功/);
   checkResult(result);
 });
 
@@ -122,7 +155,7 @@ test("服务器已完成时只查询一次且不领取", async () => {
   const result = await runScript(SCRIPT, { store: store(), http: () => ({ body: DONE }) });
   assert.equal(result.requests.length, 1);
   assert.equal(result.requests[0].url, DAILY);
-  assert.match(output(result), /今日已完成/);
+  assert.match(output(result), /今日已签到/);
   checkResult(result);
 });
 
@@ -175,7 +208,7 @@ for (const [name, body, expected] of [
     const result = await runScript(SCRIPT, { store: store(), http: () => ({ body }) });
     assert.equal(result.requests.length, 1);
     assert.match(output(result), expected);
-    assert.doesNotMatch(output(result), /签到成功|今日已完成/);
+    assert.doesNotMatch(output(result), /签到成功|今日已签到/);
     checkResult(result);
   });
 }
@@ -185,7 +218,7 @@ test("领取返回 200 仍必须核验；未完成时不重复领取", async () 
   assert.equal(result.requests.length, 3);
   assert.equal(result.requests.filter((item) => item.url.includes("/redeem?")).length, 1);
   assert.match(output(result), /领取后任务页未确认/);
-  assert.doesNotMatch(output(result), /签到成功|今日已完成/);
+  assert.doesNotMatch(output(result), /签到成功|今日已签到/);
   checkResult(result);
 });
 
@@ -211,7 +244,7 @@ test("顺序重复运行根据服务端已领取状态跳过领取", async () =>
   const second = await runScript(SCRIPT, { store: credentials, http });
   assert.equal(claims, 1);
   assert.match(output(first), /签到成功/);
-  assert.match(output(second), /今日已完成/);
+  assert.match(output(second), /今日已签到/);
   assert.equal(second.requests.length, 1);
   checkResult(first);
   checkResult(second);
@@ -259,7 +292,7 @@ for (const status of [401, 403, 429, 500]) {
   test("HTTP " + status + " 不冒充成功", async () => {
     const result = await runScript(SCRIPT, { store: store(), http: () => ({ status, body: "失败" }) });
     assert.equal(result.requests.length, 1);
-    assert.doesNotMatch(output(result), /签到成功|今日已完成/);
+    assert.doesNotMatch(output(result), /签到成功|今日已签到/);
     assert.match(output(result), status === 401 ? /尚未登录/ : new RegExp("HTTP " + status));
     checkResult(result);
   });

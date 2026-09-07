@@ -19,8 +19,9 @@
     finished = true;
     try {
       if (subtitle) {
-        console.log("V2EX：" + subtitle + "。" + body);
-        $notification.post("V2EX 每日签到", subtitle, body, {
+        const status = subtitle + " · 账号 1";
+        console.log("V2EX：" + status + "\n" + body);
+        $notification.post("V2EX", status, body, {
           url: origin + "/mission/daily",
         });
       }
@@ -89,9 +90,9 @@
     if ($persistentStore.read(STORE_KEY) === encoded) {
       finish();
     } else if ($persistentStore.write(encoded, STORE_KEY)) {
-      finish("凭据已更新", "已保存此浏览器的 Cookie 和 User-Agent；运行签到可验证登录状态。");
+      finish("Cookie 更新成功", "后续签到将使用最新登录信息");
     } else {
-      finish("保存失败", "Surge 未能写入凭据，请检查持久化存储后重新打开任务页。");
+      finish("Cookie 更新失败", "原因：Surge 未能保存登录信息，请重新打开任务页");
     }
   }
 
@@ -109,6 +110,27 @@
   function visibleHtml(body) {
     return body.replace(/<!--[\s\S]*?-->/g, "")
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+  }
+
+  function balanceText(body) {
+    const area = /<a\b[^>]*\bclass=["'][^"']*\bbalance_area\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/i.exec(visibleHtml(body));
+    if (!area) return "当前余额：查询失败";
+    const content = area[1].replace(/&nbsp;|&#160;/gi, " ");
+    const pattern = /(-?[\d,]+)\s*<img\b([^>]+)>/gi;
+    const units = { G: "金币", S: "银币", B: "铜币" };
+    const parts = [];
+    const seen = {};
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const alt = /\balt=["']([GSB])["']/i.exec(match[2]);
+      const unit = alt && alt[1].toUpperCase();
+      if (!unit || seen[unit] || !/^-?(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(match[1])) return "当前余额：查询失败";
+      const value = Number(match[1].replace(/,/g, ""));
+      if (!Number.isSafeInteger(value)) return "当前余额：查询失败";
+      seen[unit] = true;
+      parts.push(value + " " + units[unit]);
+    }
+    return parts.length ? "当前余额：" + parts.join("，") : "当前余额：查询失败";
   }
 
   function pageState(body) {
@@ -216,24 +238,24 @@
     const dailyUrl = origin + "/mission/daily";
     const page = await fetchPage(dailyUrl, credentials);
     const state = pageState(page);
-    if (state === "done") { finish("今日已完成", "服务器确认每日登录奖励已领取。"); return; }
+    if (state === "done") { finish("今日已签到", balanceText(page)); return; }
     if (state === "invalid") throw failure("任务页响应格式异常，未发出领取请求。");
     const redeemUrl = claimUrl(page);
     if (!redeemUrl) throw failure("未找到有效的每日奖励领取令牌，未发出领取请求；请检查任务页。");
     await fetchPage(redeemUrl, credentials);
     const verified = await fetchPage(dailyUrl, credentials);
     if (pageState(verified) !== "done") throw failure("领取后任务页未确认奖励已领取；本次结果未确认，未重复领取。");
-    finish("签到成功", "已重新读取任务页，服务器确认每日登录奖励已领取。");
+    finish("签到成功", balanceText(verified));
   }
 
   if (typeof $request !== "undefined" && $request) {
-    try { capture(); } catch (_) { finish("捕获失败", "无法保存凭据，请重新打开已登录的日常任务页。"); }
+    try { capture(); } catch (_) { finish("Cookie 更新失败", "原因：无法保存登录信息，请重新打开日常任务页"); }
     return;
   }
   setTimeout(function () {
-    finish("执行超时", "本次未确认签到结果；重新运行时将先检查服务器领取状态。");
+    finish("签到失败", "原因：执行超时，未确认本次结果");
   }, TOTAL_TIMEOUT_MS);
   checkin().catch(function (error) {
-    finish("签到未完成", error && error.safeMessage ? error.safeMessage : "脚本执行异常，未确认签到结果；请重新检查任务页。");
+    finish("签到失败", "原因：" + (error && error.safeMessage ? error.safeMessage : "脚本执行异常，请检查任务页"));
   });
 })();

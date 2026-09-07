@@ -18,7 +18,9 @@ function output(result) {
   assert.ok(!text.includes("synthetic-clearance"));
   for (const request of result.requests) {
     assert.equal(Object.hasOwn(request, "body"), false);
-    assert.ok(!Object.keys(request.headers).some((name) => /^(?:content-type|origin|refract-)/i.test(name)));
+    assert.ok(!Object.keys(request.headers).some((name) => /^(?:content-type|refract-)/i.test(name)));
+    if (request.method === "post") assert.equal(request.headers.Origin, new URL(request.url).origin);
+    else assert.equal(Object.hasOwn(request.headers, "Origin"), false);
     assert.equal(request.headers.Accept, "*/*");
     assert.equal(request.headers["Sec-Fetch-Site"], "same-origin");
     assert.equal(request.headers["Sec-Fetch-Mode"], "cors");
@@ -29,14 +31,53 @@ function output(result) {
   return text;
 }
 
-const emptyBoard = { list: [], record: null, order: -1, total: 0 };
+// 2026-09-07 两站实际未签到响应：没有领奖记录，也没有排名。
+const emptyBoard = { list: [], record: null, order: null, total: 0 };
 const todayRecord = { id: 10, member_id: 123, day_id: 7, gain: 5, created_at: "2026-09-06T14:17:26.000Z" };
+
+test("签到成功优先使用服务端 current，包括真实零余额", async () => {
+  for (const current of [6716, 0]) {
+    const result = await runCron("nodeseek", { body: { success: true, message: "今天的签到收益是5个鸡腿", gain: 5, current } });
+    assert.match(output(result), new RegExp("当前余额：" + current));
+    assert.equal(result.requests.length, 2);
+  }
+});
+
+test("签到成功未带余额时查询当前账号，余额不可得时不伪造零", async () => {
+  for (const valid of [true, false]) {
+    const result = await runCron("nodeseek", null, {
+      http(method, request) {
+        if (request.url.includes("/getInfo/")) return valid
+          ? { body: { success: true, detail: { member_id: 123, coin: 321 } } }
+          : { status: 503 };
+        return { body: method === "get" ? emptyBoard : { success: true, message: "签到成功" } };
+      },
+    });
+    assert.match(output(result), /签到成功/);
+    assert.match(output(result), valid ? /当前余额：321/ : /当前余额：查询失败/);
+    assert.equal(result.requests.filter(request => request.method === "post").length, 1);
+  }
+});
+
+test("余额账号不匹配时不展示他人的鸡腿余额", async () => {
+  const result = await runCron("nodeseek", null, {
+    http: (_method, request) => ({ body: request.url.includes("/getInfo/")
+      ? { success: true, detail: { member_id: 999, coin: 999999 } }
+      : { list: [], record: todayRecord, order: 1, total: 1 } }),
+  });
+  assert.match(output(result), /今日已签到/);
+  assert.match(output(result), /当前余额：查询失败/);
+  assert.doesNotMatch(output(result), /999999/);
+  assert.equal(result.requests.filter(request => request.method === "post").length, 0);
+});
 
 function runCron(site, response, extra = {}) {
   return runScript(script, {
     argument: "site=" + site + "&mode=fixed",
     store: { [site + "_data"]: JSON.stringify([account]) },
-    http: (method) => method === "get" ? { body: emptyBoard } : response,
+    http: (method, request) => request.url.includes("/api/account/getInfo/")
+      ? { body: { success: true, detail: { member_id: account.userId, coin: 105 } } }
+      : method === "get" ? { body: emptyBoard } : response,
     ...extra,
   });
 }
@@ -56,9 +97,37 @@ function captureOptions(overrides = {}) {
   };
 }
 
+test("未签到的 record=null、order=null 能领取一次并发送成功通知", async () => {
+  for (const site of ["nodeseek", "deepflood"]) {
+    const result = await runCron(site, {
+      status: 200,
+      body: { success: true, message: "今天的签到收益是5个鸡腿", gain: 5, current: 105 },
+    });
+    assert.deepEqual(result.requests.map(request => request.method), ["get", "post"]);
+    assert.match(output(result), /签到成功/);
+    assert.equal(result.notifications.length, 1);
+    assert.match(result.notifications[0].subtitle, /签到成功/);
+  }
+});
+
+test("签到 POST 带本站 Origin，避免 NodeSeek high risk action 拒绝", async () => {
+  const result = await runCron("nodeseek", null, {
+    http: (method, request) => {
+      if (method === "get") return { body: emptyBoard };
+      if (request.headers.Origin !== "https://www.nodeseek.com") {
+        return { status: 403, body: { success: false, message: "high risk action" } };
+      }
+      return { body: { success: true, message: "今天的签到收益是5个鸡腿", gain: 5, current: 6716 } };
+    },
+  });
+  assert.match(result.logs.join("\n"), /签到成功/);
+  assert.match(output(result), /当前余额：6716/);
+  assert.equal(result.requests.length, 2);
+});
+
 test("Surge 不提供 clearTimeout 时网络成功和失败都结束一次", async () => {
   for (const [response, expected] of [
-    [{ body: { success: true, message: "签到成功" } }, /签到成功/],
+    [{ body: { success: true, message: "签到成功", current: 105 } }, /签到成功/],
     [{ error: "synthetic-seek-secret" }, /网络请求失败/],
   ]) {
     const result = await runCron("nodeseek", response, { omitClearTimeout: true });
@@ -69,7 +138,7 @@ test("Surge 不提供 clearTimeout 时网络成功和失败都结束一次", asy
 
 test("两个站点先查询今日记录，固定模式只发一次无正文签到请求", async () => {
   for (const site of ["deepflood", "nodeseek"]) {
-    const result = await runCron(site, { status: 200, body: { success: true, message: "签到成功，获得 5 个鸡腿" } });
+    const result = await runCron(site, { status: 200, body: { success: true, message: "签到成功，获得 5 个鸡腿", current: 105 } });
     assert.match(output(result), /签到成功/);
     assert.equal(result.requests.length, 2);
     assert.equal(result.requests[0].url, "https://www." + site + ".com/api/attendance/board?page=1");
@@ -105,7 +174,7 @@ test("参数错误、未知站点和缺少凭据不会发出网络请求", async
   for (const argument of ["", "site=evil", "site=__proto__", "site=nodeseek&mode=invalid", "site=nodeseek&site=deepflood", "site=%XX", "site=nodeseek"]) {
     const result = await runScript(script, { argument });
     assert.equal(result.requests.length, 0);
-    assert.match(output(result), /执行失败/);
+    assert.match(output(result), /签到失败/);
   }
 });
 
@@ -114,7 +183,7 @@ test("捕获正常请求 Cookie，无需 Set-Cookie，保留其他账号与扩�
   const otherAccount = { userId: 456, userName: "另一个账号", token: "session=other", flags: [1] };
   const store = { nodeseek_data: JSON.stringify([oldAccount, otherAccount]), unrelated: "keep" };
   const result = await runScript(script, captureOptions({ store }));
-  assert.match(output(result), /凭据已更新/);
+  assert.match(output(result), /Cookie 更新成功/);
   assert.equal(result.requests.length, 0);
   const captured = JSON.parse(store.nodeseek_data);
   assert.equal(captured.length, 2);
@@ -139,7 +208,7 @@ test("两个站点的 Service Worker Referer 可捕获设置页账号", async ()
       headers: { ...base.request.headers, Referer: "https://www." + site + ".com/sw.js?v=" + version },
     };
     const result = await runScript(script, { ...base, argument: "site=" + site, request });
-    assert.match(output(result), /凭据已更新/);
+    assert.match(output(result), /Cookie 更新成功/);
     assert.equal(result.requests.length, 0);
     const saved = JSON.parse(result.store[site + "_data"]);
     assert.equal(saved.length, 1);
@@ -212,17 +281,19 @@ test("损坏的账号数组保留原文，捕获不清空旧数据", async () =>
   }
 });
 
-test("有效今日记录只执行 GET，两站均不重复领奖", async () => {
+test("有效今日记录只查询记录和余额，两站均不重复领奖", async () => {
   for (const site of ["nodeseek", "deepflood"]) {
     const store = { [site + "_data"]: JSON.stringify([account]) };
     const before = JSON.stringify(store);
     const result = await runCron(site, null, {
       store,
-      http: () => ({ body: { list: [], record: todayRecord, order: 1, total: 1 } }),
+      http: (_method, request) => ({ body: request.url.includes("/api/account/getInfo/")
+        ? { success: true, detail: { member_id: account.userId, coin: 105 } }
+        : { list: [], record: todayRecord, order: 1, total: 1 } }),
     });
     assert.match(output(result), /今日已签到/);
-    assert.equal(result.requests.length, 1);
-    assert.equal(result.requests[0].method, "get");
+    assert.match(output(result), /当前余额：105/);
+    assert.deepEqual(result.requests.map(request => request.method), ["get", "get"]);
     assert.equal(JSON.stringify(store), before);
   }
 });
@@ -331,10 +402,10 @@ test("一个账号失败不阻止其余账号，原始存储不会被认证失�
   const before = store.nodeseek_data;
   const result = await runCron("nodeseek", null, {
     store,
-    http: (method, _options, index) => index === 0 ? { status: 401 } : method === "get" ? { body: emptyBoard } : { body: { success: true, message: "签到成功" } },
+    http: (method, _options, index) => index === 0 ? { status: 401 } : method === "get" ? { body: emptyBoard } : { body: { success: true, message: "签到成功", current: 105 } },
   });
-  assert.match(output(result), /账号 1：签到失败/);
-  assert.match(output(result), /账号 2：签到成功/);
+  assert.match(output(result), /签到失败 · 账号 1/);
+  assert.match(output(result), /签到成功 · 账号 2/);
   assert.equal(store.nodeseek_data, before);
   assert.equal(result.requests.length, 3);
 });
