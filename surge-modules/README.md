@@ -8,14 +8,14 @@
 
 | 模块 | 安装链接 | 默认执行时间 |
 | --- | --- | --- |
-| DeepFlood | [deepflood.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/deepflood.sgmodule) | 每天 00:05 |
-| NodeSeek | [nodeseek.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/nodeseek.sgmodule) | 每天 00:05 |
-| 科研通 | [sciencehub.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/sciencehub.sgmodule) | 每天 00:05 |
-| 哔哩哔哩漫画签到 | [bilibili-manga.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/bilibili-manga.sgmodule) | 每天 00:05 |
+| DeepFlood | [deepflood.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/deepflood.sgmodule) | 每天 09:00 |
+| NodeSeek | [nodeseek.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/nodeseek.sgmodule) | 每天 09:00 |
+| 科研通 | [sciencehub.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/sciencehub.sgmodule) | 每天 09:00 |
+| 哔哩哔哩漫画签到 | [bilibili-manga.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/bilibili-manga.sgmodule) | 每天 09:00 |
 | 哔哩哔哩漫画积分抢购 | [bilibili-manga-exchange.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/bilibili-manga-exchange.sgmodule) | 周日、周一 00:00:00–00:00:59，每秒执行 |
-| V2EX | [v2ex.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/v2ex.sgmodule) | 每天 00:05 |
+| V2EX | [v2ex.sgmodule](https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/v2ex.sgmodule) | 每天 09:00 |
 
-五个普通签到模块均默认每天 00:05，可分别通过 `cron` 参数修改；积分抢购保留表中的独立默认时段。执行时间使用本机时区。已在 Surge Mac 6.9.0（12250）和 6.9.1（12260）验证；Mac 须保持唤醒且 Surge 正在运行。本模块不更改系统电源设置，也不保证关机或休眠期间执行。
+五个普通签到模块均默认每天 09:00，可分别通过 `cron` 参数修改；积分抢购保留表中的独立默认时段。执行时间使用本机时区。已在 Surge Mac 6.9.0（12250）和 6.9.1（12260）验证；Mac 须保持唤醒且 Surge 正在运行。本模块不更改系统电源设置，也不保证关机或休眠期间执行。
 
 ## 获取 Cookie
 
@@ -53,7 +53,7 @@ NodeSeek
 
 事件中的「脚本执行完毕」只表示脚本已经结束，失败分支也会正常结束；签到结果以通知和脚本日志为准。
 
-V2EX 按 UTC 切换奖励日，对应 UTC+8 的早上 08:00。[站方说明](https://www.v2ex.com/t/67463) 默认 00:05 保持不变，此时可能仍显示网站前一奖励日已完成；如需在新奖励日开放后领取，可把 V2EX 的 `cron` 单独设为 `5 8 * * *`。
+V2EX 按 UTC 切换奖励日，对应 UTC+8 的早上 08:00。[站方说明](https://www.v2ex.com/t/67463) 默认每天 09:00，已在新奖励日开放之后；仍可通过 `cron` 单独调整。
 
 ## 参数
 
@@ -74,7 +74,7 @@ V2EX 按 UTC 切换奖励日，对应 UTC+8 的早上 08:00。[站方说明](htt
 ## 从旧模块迁移
 
 1. 备份旧模块文件、其引用的全部 JavaScript、模块参数及启用状态，保存在仓库之外，再安装新的对应模块。
-2. 普通签到默认统一为 00:05，如需其他时间可分别设置 `cron`；保留原捕获开关。旧 Seek 存储中的 `nodeseek_default=true`／`deepflood_default=true` 表示随机奖励，应迁移为 `mode=random`；`false` 对应 `mode=fixed`。
+2. 普通签到默认统一为 09:00，如需其他时间可分别设置 `cron`；保留原捕获开关。旧 Seek 存储中的 `nodeseek_default=true`／`deepflood_default=true` 表示随机奖励，应迁移为 `mode=random`；`false` 对应 `mode=fixed`。
 3. 关闭对应旧模块，再验证新模块，避免重复 cron 和捕获规则抢先匹配。
 4. 若需回退，关闭新模块，从备份恢复旧模块定义、参数和启用状态，并让其 `script-path` 指向已备份的旧 JavaScript，或已经核对内容的固定提交地址。
 
