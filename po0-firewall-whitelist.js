@@ -14,7 +14,7 @@
  * - 网络槽位参数：cellular_slot、wired_slot、unknown_slot，以及
  *   ssid_slots="Home WiFi=0|Office=1"。指定网络槽位优先于 token@N。
  * - 默认 slotless 写入：按 updated_at 触发 LRU 淘汰；Surge 版本由切网事件
- *   与面板刷新触发，不再包含 cron。
+ *   与面板刷新触发，也通过 cron 定时触发（默认每天 00:00 起每 3 小时）。
  * - 可选固定槽位：token 后加 @N（如 pgnfw_xxx@0）→ POST .../add?slot=N，
  *   把本机 IP 钉在槽位 N，**永不被 LRU 淘汰**。槽位写入语义：
  *     · 本机 IP 已在该槽位 → 刷新 updated_at；
