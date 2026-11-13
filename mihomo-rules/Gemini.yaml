@@ -1,15 +1,14 @@
-# 由 surge-rules/Gemini.list 生成，请修改源文件后运行 node tools/sync-mihomo-rules.js --write
+# NAME: Gemini
+# AUTHOR: blackmatrix7
+# REPO: https://github.com/blackmatrix7/ios_rule_script
+# UPDATED: 2025-06-06 09:20:02
+# DOMAIN: 3
+# DOMAIN-KEYWORD: 3
+# DOMAIN-SUFFIX: 7
+# TOTAL: 13
+# SNAPSHOT: blackmatrix7/ios_rule_script@0b6897d rule/Clash/Gemini/Gemini_No_Resolve.yaml（2026-10-28，GPL-2.0），由 ProxyTools 自行维护
+# MODIFIED: 末尾「ProxyTools 补充」段由 surge-rules/Gemini.list 同步，请勿直接修改
 payload:
-  # NAME: Gemini
-  # AUTHOR: blackmatrix7
-  # REPO: https://github.com/blackmatrix7/ios_rule_script
-  # UPDATED: 2025-06-06 09:20:02
-  # DOMAIN: 3
-  # DOMAIN-KEYWORD: 3
-  # DOMAIN-SUFFIX: 7
-  # TOTAL: 13
-  # SNAPSHOT: blackmatrix7/ios_rule_script@0b6897d（2026-10-28 拉取，GPL-2.0），由 ProxyTools 自行维护
-  # MODIFIED: 本仓库补充见文件末尾「ProxyTools 补充」，上方 TOTAL 只统计上游条目
   - DOMAIN,ai.google.dev
   - DOMAIN,alkalimakersuite-pa.clients6.google.com
   - DOMAIN,makersuite.google.com
@@ -23,6 +22,7 @@ payload:
   - DOMAIN-KEYWORD,colab
   - DOMAIN-KEYWORD,developerprofiles
   - DOMAIN-KEYWORD,generativelanguage
+
   # ===== ProxyTools 补充 =====
   # 原配置单规则
   - DOMAIN-SUFFIX,withgoogle.com
