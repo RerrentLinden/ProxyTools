@@ -8,6 +8,7 @@
 | [surge-scripts](surge-scripts/) | 模块引用的 JavaScript |
 | [surge-rules](surge-rules/) | Surge 分流规则集（`.list`），来源与修改见 [surge-rules/README.md](surge-rules/README.md) |
 | [mihomo-rules](mihomo-rules/) | Clash / mihomo 内核用的 YAML 规则集 |
+| [tools](tools/) | 维护脚本（由 Surge 规则集生成 mihomo yaml） |
 | [tests](tests/) | 离线测试，仓库根目录执行 `node --test tests/*.test.js` |
 
 ## 模块安装
@@ -25,7 +26,13 @@
 
 Surge：`RULE-SET,https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-rules/<名称>.list,<策略>,no-resolve`
 
-mihomo：`https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Claude.yaml`（会解析域名），`https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Claude_No_Resolve.yaml`（IP 规则不解析）。
+mihomo（`behavior: classical`）：
+
+- `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Claude_No_Resolve.yaml`（`Claude.yaml` 内容相同，仅保留旧名称）
+- `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Gemini.yaml`
+- `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/AIOther.yaml`
+
+`Gemini.yaml`、`AIOther.yaml` 由同名 `.list` 生成：改 `surge-rules/` 后运行 `node tools/sync-mihomo-rules.js --write`，测试会检查两边是否一致。
 
 ## 2026-11-13 链接迁移
 

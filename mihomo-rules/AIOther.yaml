@@ -1,0 +1,12 @@
+# 由 surge-rules/AIOther.list 生成，请修改源文件后运行 node tools/sync-mihomo-rules.js --write
+payload:
+  # NAME: AIOther
+  # AUTHOR: RerrentLinden
+  # REPO: https://github.com/RerrentLinden/ProxyTools
+  # 用途：没有独立规则集的 AI 服务，配合 AI 策略组使用。
+  # Perplexity
+  - DOMAIN-SUFFIX,perplexity.ai
+  - DOMAIN-SUFFIX,perplexity.com
+  - DOMAIN-SUFFIX,pplx.ai
+  # LMArena
+  - DOMAIN-SUFFIX,arena.ai
