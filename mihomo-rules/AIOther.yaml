@@ -10,3 +10,6 @@ payload:
   - DOMAIN-SUFFIX,pplx.ai
   # LMArena
   - DOMAIN-SUFFIX,arena.ai
+  # Kimi 国际版（国内版 kimi.com、moonshot.cn 不在此列，按国内域名直连）
+  - DOMAIN-SUFFIX,kimi.ai
+  - DOMAIN-SUFFIX,moonshot.ai

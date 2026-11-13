@@ -15,7 +15,7 @@
 | `Copilot.list` | 原配置单规则 `githubcopilot.com` |
 | `HBO.list` | 原配置单规则 `discomax.com`（`max.com` 上游已有） |
 | `Claude.list` | 本仓库原有；2026-11-13 增加 `stripe.com`、`stripe.network`，使 Stripe 支付与风控走同一出口 |
-| `AIOther.list` | 新建：Perplexity、LMArena 等没有独立规则集的 AI 服务 |
+| `AIOther.list` | 新建：Perplexity、LMArena、Kimi 国际版（kimi.ai、moonshot.ai）等没有独立规则集的 AI 服务 |
 
 `podcasts.apple.com` 已被 `Apple_All_No_Resolve.list` 的 `DOMAIN-SUFFIX,apple.com` 覆盖，不再单列。
 
