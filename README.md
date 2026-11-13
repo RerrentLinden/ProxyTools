@@ -28,23 +28,6 @@ Surge：`RULE-SET,https://raw.githubusercontent.com/RerrentLinden/ProxyTools/mai
 
 mihomo：`https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/<名称>.yaml`，`behavior: classical`。来源与维护方式见 [mihomo-rules/README.md](mihomo-rules/README.md)。
 
-## 2026-11-13 链接迁移
-
-根目录旧链接已删除，仍在使用的设备请改用新链接：
-
-| 旧路径 | 新路径 |
-| --- | --- |
-| `Claude.list` | `surge-rules/Claude.list` |
-| `Claude.yaml` | `mihomo-rules/Claude.yaml` |
-| `Claude_No_Resolve.yaml` | `mihomo-rules/Claude_No_Resolve.yaml` |
-| `po0-firewall-whitelist.sgmodule` | `surge-modules/po0-firewall-whitelist.sgmodule` |
-| `boil-ip-manager.sgmodule` | `surge-modules/boil-ip-manager.sgmodule` |
-| `DualAirportinfo.sgmodule` | `surge-modules/DualAirportinfo.sgmodule` |
-| `po0-firewall-whitelist.js`、`boil-ip-manager.js`、`surge-modules/scripts/*.js` | `surge-scripts/*.js` |
-| `deepflood.sgmodule`、`nodeseek.sgmodule`、`科研通自动签到.sgmodule`、`sciencehub-script.js` | 已删除，改装 `surge-modules/` 下的对应模块 |
-
-在 Surge 中改模块链接会被视为新模块，模块参数（如 token）需要重新填写。
-
 ## Boil の IP 管理模块
 
 手动查询或更换 Boilcloud VPS 公网 IP。模块不包含定时任务、网络切换事件或面板自动刷新；API 只会在用户点击对应面板刷新按钮时调用。脚本资源自身的定期更新不会调用 Boil API。
