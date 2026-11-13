@@ -37,6 +37,6 @@
 | Google | Google |
 | WeChat | DIRECT |
 
-`Gemini.list`、`AIOther.list` 同时生成 mihomo 版本（`mihomo-rules/`），修改后运行 `node tools/sync-mihomo-rules.js --write`。
+「ProxyTools 补充」段同时用于 mihomo 同名规则集（`mihomo-rules/`），修改后运行 `node tools/sync-mihomo-rules.js --write`。
 
 AI 相关规则集必须排在 `Google.list` 之前，否则 Gemini / Antigravity 的 googleapis.com 子域会先命中 Google 组。
