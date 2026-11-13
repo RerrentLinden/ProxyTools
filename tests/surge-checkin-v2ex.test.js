@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { runScript } = require("./helpers/surge-harness");
 
-const SCRIPT = path.join(__dirname, "../surge-modules/scripts/v2ex.js");
+const SCRIPT = path.join(__dirname, "../surge-scripts/v2ex.js");
 const ORIGIN = "https://www.v2ex.com";
 const DAILY = ORIGIN + "/mission/daily";
 const COOKIE = "A2=synthetic-account-secret; PB3_SESSION=synthetic-session-secret";

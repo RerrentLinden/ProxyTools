@@ -1,8 +1,48 @@
 # ProxyTools
 
-## Surge Mac 签到模块
+## 目录
 
-DeepFlood、NodeSeek、科研通、哔哩哔哩漫画签到／积分抢购，以及 V2EX 的模块和全部运行 JS 统一位于 [surge-modules](surge-modules/README.md)。安装方法、浏览器 Cookie 获取和逐站实测结果见该目录；积分兑换默认只读试运行。
+| 目录 | 内容 |
+| --- | --- |
+| [surge-modules](surge-modules/) | Surge 模块（`.sgmodule`），签到模块说明见 [surge-modules/README.md](surge-modules/README.md) |
+| [surge-scripts](surge-scripts/) | 模块引用的 JavaScript |
+| [surge-rules](surge-rules/) | Surge 分流规则集（`.list`），来源与修改见 [surge-rules/README.md](surge-rules/README.md) |
+| [mihomo-rules](mihomo-rules/) | Clash / mihomo 内核用的 YAML 规则集 |
+| [tests](tests/) | 离线测试，仓库根目录执行 `node --test tests/*.test.js` |
+
+## 模块安装
+
+在 Surge「模块 → 从 URL 安装模块」中粘贴链接。
+
+| 模块 | 安装链接 |
+| --- | --- |
+| po0 防火墙自动加白 | `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/po0-firewall-whitelist.sgmodule` |
+| Boil の IP 管理 | `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/boil-ip-manager.sgmodule` |
+| 机场流量信息 | `https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/DualAirportinfo.sgmodule` |
+| 签到模块（6 个） | 见 [surge-modules/README.md](surge-modules/README.md) |
+
+## 分流规则集
+
+Surge：`RULE-SET,https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-rules/<名称>.list,<策略>,no-resolve`
+
+mihomo：`https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Claude.yaml`（会解析域名），`https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/mihomo-rules/Claude_No_Resolve.yaml`（IP 规则不解析）。
+
+## 2026-11-13 链接迁移
+
+根目录旧链接已删除，仍在使用的设备请改用新链接：
+
+| 旧路径 | 新路径 |
+| --- | --- |
+| `Claude.list` | `surge-rules/Claude.list` |
+| `Claude.yaml` | `mihomo-rules/Claude.yaml` |
+| `Claude_No_Resolve.yaml` | `mihomo-rules/Claude_No_Resolve.yaml` |
+| `po0-firewall-whitelist.sgmodule` | `surge-modules/po0-firewall-whitelist.sgmodule` |
+| `boil-ip-manager.sgmodule` | `surge-modules/boil-ip-manager.sgmodule` |
+| `DualAirportinfo.sgmodule` | `surge-modules/DualAirportinfo.sgmodule` |
+| `po0-firewall-whitelist.js`、`boil-ip-manager.js`、`surge-modules/scripts/*.js` | `surge-scripts/*.js` |
+| `deepflood.sgmodule`、`nodeseek.sgmodule`、`科研通自动签到.sgmodule`、`sciencehub-script.js` | 已删除，改装 `surge-modules/` 下的对应模块 |
+
+在 Surge 中改模块链接会被视为新模块，模块参数（如 token）需要重新填写。
 
 ## Boil の IP 管理模块
 
@@ -36,5 +76,5 @@ DeepFlood、NodeSeek、科研通、哔哩哔哩漫画签到／积分抢购，以
 
 文件：
 
-- `boil-ip-manager.sgmodule`
-- `boil-ip-manager.js`
+- `surge-modules/boil-ip-manager.sgmodule`
+- `surge-scripts/boil-ip-manager.js`

@@ -1,6 +1,6 @@
 /*
  * 科研通每日签到，原生 Surge Mac 脚本。
- * 接口与 sciencehubCookie 旧字段参考本仓库 sciencehub-script.js、imoki/sign_script。
+ * 接口与 sciencehubCookie 旧字段参考本仓库早期的科研通脚本、imoki/sign_script。
  * 重新实现请求、浏览器 Cookie 捕获与业务判定，无外部运行时依赖。
  */
 (function () {

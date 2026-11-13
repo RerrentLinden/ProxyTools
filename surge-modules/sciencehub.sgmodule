@@ -6,8 +6,8 @@
 #!arguments-desc=cron：每天 09:00 签到，可修改为其他 Cron 表达式。\ncapture：捕获脚本名称，填 # 可关闭捕获。\nmitm：保留 hostname；填 # 可停止本模块追加解密域名。\n保留已有 sciencehubCookie 凭据，浏览器捕获后保存完整 Cookie。
 
 [Script]
-科研通定时签到 = type=cron,cronexp="{{{cron}}}",timeout=30,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/sciencehub.js
-{{{capture}}} = type=http-response,pattern=^https:\/\/www\.ablesci\.com\/(?:\?|user(?:\/|\?|$)|$),requires-body=true,max-size=1048576,timeout=15,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/scripts/sciencehub.js
+科研通定时签到 = type=cron,cronexp="{{{cron}}}",timeout=30,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-scripts/sciencehub.js
+{{{capture}}} = type=http-response,pattern=^https:\/\/www\.ablesci\.com\/(?:\?|user(?:\/|\?|$)|$),requires-body=true,max-size=1048576,timeout=15,script-path=https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-scripts/sciencehub.js
 
 [MITM]
 {{{mitm}}} = %APPEND% www.ablesci.com

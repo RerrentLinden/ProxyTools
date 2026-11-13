@@ -1,6 +1,6 @@
 # Surge Mac 签到模块
 
-六个模块的定义和全部运行脚本均保存在本目录。运行时无需 BoxJS、Node.js、Gist 或其他仓库的 JavaScript。
+六个签到模块的定义保存在本目录，运行脚本保存在 [surge-scripts](../surge-scripts/)。运行时无需 BoxJS、Node.js、Gist 或其他仓库的 JavaScript。
 
 ## 安装
 
@@ -80,20 +80,17 @@ V2EX 按 UTC 切换奖励日，对应 UTC+8 的早上 08:00。[站方说明](htt
 
 漫画旧设置 `ProductName`、`ProductNum`、`ExchangeNum` 分别迁移到 `product_name`、`product_num`、`attempts`；新模块显式参数优先于旧存储值。迁移后先保留 `dry_run=true`，确认商品、数量和预算后才开启真实兑换。
 
-保留旧存储键 `deepflood_data`、`nodeseek_data`、`sciencehubCookie`、`BILI_COMICS_CHECKIN`，漫画两项功能共享账号。科研通新增完整 Cookie 和 User-Agent 辅助键，V2EX 使用独立 `V2EX_CHECKIN`。仓库根目录的三个旧模块 URL 及科研通 JS URL 仍提供兼容入口，其中原有中文参数名不变；旧 Seek 入口省略 `mode`，继续读取原有 `*_default` 设置。
-
-旧兼容 URL 也会随本次发布更新，不能作为原版本备份。回退必须同时恢复模块定义和所依赖的旧脚本内容；仅换回旧 URL 不会恢复旧实现。
+保留旧存储键 `deepflood_data`、`nodeseek_data`、`sciencehubCookie`、`BILI_COMICS_CHECKIN`，漫画两项功能共享账号。科研通新增完整 Cookie 和 User-Agent 辅助键，V2EX 使用独立 `V2EX_CHECKIN`。仓库根目录的三个旧模块 URL 及科研通 JS URL 已于 2026-11-13 删除；仍在使用旧 URL 的设备请改装上表链接。回退必须同时恢复模块定义和所依赖的旧脚本内容；仅换回旧 URL 不会恢复旧实现。
 
 ## 开发验证
 
 在仓库根目录执行：
 
 ```sh
-node --test tests/surge-checkin-*.test.js
+node --test tests/*.test.js
 node tests/validate-surge-modules.js
-node tests/sync-legacy-checkins.js --check
 ```
 
-正式源文件修改后，用 `node tests/sync-legacy-checkins.js --write` 更新兼容入口。原生验证配置可通过 `node tests/validate-surge-modules.js --profile-dir /tmp/proxytools-surge-check` 生成，再逐个运行 `surge-cli --check`。
+原生验证配置可通过 `node tests/validate-surge-modules.js --profile-dir /tmp/proxytools-surge-check` 生成，再逐个运行 `surge-cli --check`。
 
 真实验证结果见 [验证记录](VALIDATION.md)，协议依据和来源见 [来源说明](SOURCES.md)。
