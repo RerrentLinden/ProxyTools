@@ -3,8 +3,8 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const script = fs.readFileSync(path.join(__dirname, "..", "boil-ip-manager.js"), "utf8");
-const moduleText = fs.readFileSync(path.join(__dirname, "..", "boil-ip-manager.sgmodule"), "utf8");
+const script = fs.readFileSync(path.join(__dirname, "..", "surge-scripts", "boil-ip-manager.js"), "utf8");
+const moduleText = fs.readFileSync(path.join(__dirname, "..", "surge-modules", "boil-ip-manager.sgmodule"), "utf8");
 const profileText = fs.readFileSync(path.join(__dirname, "boil-ip-manager-profile.conf"), "utf8");
 
 const TOKEN = "tok-Secret-9f3c-Example";
@@ -252,7 +252,7 @@ test("module keeps manual-only triggers and declares confirm_seconds", () => {
   assert.doesNotMatch(moduleText.split("[Panel]")[1], /update-interval\s*=/);
   assert.match(
     moduleText,
-    /https:\/\/raw\.githubusercontent\.com\/RerrentLinden\/ProxyTools\/main\/boil-ip-manager\.js/
+    /https:\/\/raw\.githubusercontent\.com\/RerrentLinden\/ProxyTools\/main\/surge-scripts\/boil-ip-manager\.js/
   );
   assert.match(moduleText, /change_enabled:false/);
   assert.match(moduleText, /^#!arguments=.*\bconfirm_seconds:120\b/m);

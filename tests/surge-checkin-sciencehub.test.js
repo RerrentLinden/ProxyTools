@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { runScript } = require("./helpers/surge-harness");
-const script = path.join(__dirname, "../surge-modules/scripts/sciencehub.js");
+const script = path.join(__dirname, "../surge-scripts/sciencehub.js");
 const identity = "synthetic-science-identity";
 const fullCookie = "PHPSESSID=synthetic-session; _identity-frontend=" + identity + "; _csrf-frontend=synthetic-csrf";
 

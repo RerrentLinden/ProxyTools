@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { runScript } = require("./helpers/surge-harness");
-const script = path.join(__dirname, "../surge-modules/scripts/seek-checkin.js");
+const script = path.join(__dirname, "../surge-scripts/seek-checkin.js");
 const token = "session=synthetic-seek-secret; cf_clearance=synthetic-clearance";
 const account = {
   userId: 123, userName: "测试账号", token,

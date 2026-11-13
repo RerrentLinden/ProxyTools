@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { runScript } = require('./helpers/surge-harness');
 
-const filename = path.join(__dirname, '../surge-modules/scripts/bilibili-manga.js');
+const filename = path.join(__dirname, '../surge-scripts/bilibili-manga.js');
 const key = 'BILI_COMICS_CHECKIN';
 const fixedNow = '2026-09-06T03:00:00.000Z';
 const cookie = 'SESSDATA=synthetic-session-only; bili_jct=synthetic-csrf; DedeUserID=1001';

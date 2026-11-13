@@ -7,7 +7,8 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const directory = path.join(root, "surge-modules");
-const prefix = "https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-modules/";
+const scriptDirectory = path.join(root, "surge-scripts");
+const prefix = "https://raw.githubusercontent.com/RerrentLinden/ProxyTools/main/surge-scripts/";
 const expected = ["deepflood", "nodeseek", "sciencehub", "bilibili-manga", "bilibili-manga-exchange", "v2ex"];
 
 function splitFields(value) {
@@ -86,8 +87,8 @@ for (const name of expected) {
     assert.ok(Number(fields.timeout) > 0 && Number(fields.timeout) <= 180, "脚本应有明确且受限的超时");
     assert.ok(fields["script-path"] && fields["script-path"].startsWith(prefix), "执行脚本必须来自本仓库正式目录");
     const relative = fields["script-path"].slice(prefix.length);
-    assert.match(relative, /^scripts\/[a-z0-9-]+\.js$/, "脚本路径无效");
-    const scriptPath = path.join(directory, relative);
+    assert.match(relative, /^[a-z0-9-]+\.js$/, "脚本路径无效");
+    const scriptPath = path.join(scriptDirectory, relative);
     assert.ok(fs.statSync(scriptPath).isFile(), `依赖未入库：${relative}`);
     scriptFiles.add(scriptPath);
     if (fields.type === "cron") assert.ok([5, 6].includes(fields.cronexp.trim().split(/\s+/).length), "Cron 字段数错误");
