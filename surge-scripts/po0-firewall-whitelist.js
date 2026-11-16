@@ -3,25 +3,32 @@
  * 兼容：Surge / Stash / Shadowrocket / Loon / Quantumult X
  * （Egern 运行模型不同，用独立的 egern/po0-firewall-whitelist.js）
  *
- * POST /api/firewall/<token>/add  把"当前请求源 IP"加入白名单，并回显
+ * POST /api/firewall/<token>/add  把"当前请求源所在网段"加入白名单，并回显
  *   {enabled, whitelist:[{ip,slot}], limit, currentIp}。token 走 URL 路径，无需
- *   Authorization 头。服务端对已在白名单的 IP 做幂等处理（重复请求不
+ *   Authorization 头。服务端对已在白名单的网段做幂等处理（重复请求不
  *   重复占坑、不推进淘汰队列），因此这里每次直接无脑请求。
- * 白名单写满后按写入时间先进先出自动淘汰最旧 IP；API 无删除接口。
+ * GET  /api/firewall/<token>      只读查询，回显同样的字段，不写入。
+ * 2026-11 起白名单粒度是 /24：ip 与 currentIp 形如 203.0.113.0/24。同一路由器
+ *   的不同频段、同一运营商的相邻出口都会落到同一网段。
+ * 白名单写满后按写入时间先进先出自动淘汰最旧网段；API 无删除接口。
+ * /add 前面有 openresty，整点撞车或 1–2 秒内连发会返回 503。
  *
  * 策略：
- * - 每次直接 POST 上报当前出口 IP；Surge 模块按当前网络选择槽位。
+ * - 每次直接 POST 上报当前出口；Surge 模块按当前网络选择槽位。
  * - 网络槽位参数：cellular_slot、wired_slot、unknown_slot，以及
  *   ssid_slots="Home WiFi=0|Office=1"。指定网络槽位优先于 token@N。
  * - 默认 slotless 写入：按 updated_at 触发 LRU 淘汰；Surge 版本由切网事件
  *   与面板刷新触发，也通过 cron 定时触发（默认每天 00:00 起每 3 小时）。
  * - 可选固定槽位：token 后加 @N（如 pgnfw_xxx@0）→ POST .../add?slot=N，
- *   把本机 IP 钉在槽位 N，**永不被 LRU 淘汰**。槽位写入语义：
- *     · 本机 IP 已在该槽位 → 刷新 updated_at；
- *     · 槽位有旧 IP → 行级顶替，旧 IP 丢弃；
- *     · 本机 IP 已 slotless → 删 slotless 行升级到该槽位；
- *     · 本机 IP 已占用**别的**槽位 → 403 冲突，需先去 UI 删旧槽位（脚本会报 ❌）。
- * - 蜂窝（主接口 pdp_ip*）写入的 IP 做 📶 标记，面板同时显示网络类型。
+ *   把当前网段钉在槽位 N，**永不被 LRU 淘汰**。槽位写入语义：
+ *     · 当前网段已在该槽位 → 刷新 updated_at；
+ *     · 槽位有旧网段 → 行级顶替，旧网段丢弃；
+ *     · 当前网段已 slotless → 删 slotless 行升级到该槽位；
+ *     · 当前网段已占用**别的**槽位 → 403，服务端不会跨槽位移动。脚本随后用
+ *       GET 查询：网段已在白名单就算成功并标出实际槽位，否则报 ❌。
+ * - 网络错误、429、5xx 按 RETRY_DELAYS_MS 重试。模块 timeout 要容纳
+ *   POST 与 GET 各自的全部重试：2 ×（3 × REQUEST_TIMEOUT + 3 + 8）秒。
+ * - 蜂窝（主接口 pdp_ip*）写入的网段做 📶 标记，面板同时显示网络类型。
  *
  * token 来源（优先级从高到低）：
  * 1. argument: tokens=<pgnfw_xxx>[@槽位],<pgnfw_yyy>（Surge/Loon/Stash 模块参数）
@@ -32,7 +39,9 @@
 
 var INLINE_TOKENS = "";
 
-var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> + "/add"
+var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> [+ "/add"]
+var REQUEST_TIMEOUT = 15; // 秒
+var RETRY_DELAYS_MS = [3000, 8000]; // 可重试失败后的等待时间，长度即重试次数
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
@@ -244,45 +253,109 @@ function readHistory(key) {
   }
 }
 
+function sleep(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+}
+
+function isStatusPayload(data) {
+  return !!data && typeof data === "object" && Array.isArray(data.whitelist);
+}
+
+function serverMessage(data) {
+  if (!data || typeof data !== "object") return "";
+  var message = data.error || data.message || data.msg || "";
+  return typeof message === "string" ? message : JSON.stringify(message);
+}
+
+function describeFailure(r, data) {
+  if (r.error) return r.error;
+  var message = serverMessage(data);
+  return "HTTP " + r.status + (message ? "：" + message : "");
+}
+
+// 网络错误（含切网瞬间的 No outgoing interface）、限流与服务端故障可重试；
+// 其余状态码是确定结果，重试也不会变。
+function isRetryable(r) {
+  return !!r.error || r.status === 429 || r.status >= 500;
+}
+
+function requestWithRetry(method, url) {
+  var attempt = 0;
+  var opts = { url: url, headers: { "Content-Type": "application/json" }, timeout: REQUEST_TIMEOUT };
+  if (method === "POST") opts.body = "";
+  function run() {
+    return httpRequest(method, opts).then(function (r) {
+      if (attempt < RETRY_DELAYS_MS.length && isRetryable(r)) {
+        return sleep(RETRY_DELAYS_MS[attempt++]).then(run);
+      }
+      return r;
+    });
+  }
+  return run();
+}
+
+// whitelist 元素为 {ip, slot} 对象（旧版曾是纯 IP 字符串）：记下 ip→slot 再摊平成网段数组
+function normalizeStatus(data) {
+  var slotOf = {};
+  data.whitelist.forEach(function (e) {
+    if (e && typeof e === "object" && e.slot !== null && e.slot !== undefined) {
+      slotOf[e.ip] = e.slot;
+    }
+  });
+  var whitelist = data.whitelist.map(function (e) {
+    return e && typeof e === "object" ? e.ip : e;
+  });
+  return {
+    enabled: data.enabled,
+    whitelist: whitelist,
+    slotOf: slotOf,
+    limit: data.limit,
+    currentIp: data.currentIp,
+    applied: data.enabled === true && whitelist.indexOf(data.currentIp) !== -1,
+  };
+}
+
 function apiCall(token, slot) {
-  // token 走 URL 路径，命中 /add 即把当前出口 IP 加白；带 slot 则钉固定槽位
+  // token 走 URL 路径，命中 /add 即把当前出口网段加白；带 slot 则钉固定槽位
   var url = API_BASE + encodeURIComponent(token) + "/add";
   if (slot !== null && slot !== undefined && slot !== "") {
     url += "?slot=" + encodeURIComponent(slot);
   }
-  return httpRequest("POST", {
-    url: url,
-    headers: { "Content-Type": "application/json" },
-    body: "",
-    timeout: 15,
-  }).then(function (r) {
-    if (r.error) return { error: r.error };
-    var data = null;
-    try {
-      data = JSON.parse(r.body);
-    } catch (e) {}
-    // 带槽位写入且本机 IP 已占用别的槽位 → 服务端 403 冲突，需去 UI 删旧槽位
-    if (r.status === 403) {
-      return {
-        error: "槽位冲突：本机 IP 已在其它槽位，请先去 UI 删除",
-        conflict: true,
-        currentIp: data && data.currentIp,
-      };
+  return requestWithRetry("POST", url).then(function (r) {
+    var data = r.error ? null : parseJson(r.body);
+    if (!r.error && r.status === 403) return resolveRejected(token, data);
+    if (r.error || r.status >= 400 || !isStatusPayload(data)) {
+      return { error: describeFailure(r, data) };
     }
-    if (!data) return { error: "响应异常: " + String(r.body).slice(0, 80) };
-    // whitelist 元素为 {ip, slot} 对象（旧版曾是纯 IP 字符串）：记下 ip→slot 再摊平成 IP 数组
-    var raw = Array.isArray(data.whitelist) ? data.whitelist : [];
-    data.slotOf = {};
-    raw.forEach(function (e) {
-      if (e && typeof e === "object" && e.slot !== null && e.slot !== undefined) {
-        data.slotOf[e.ip] = e.slot;
-      }
-    });
-    data.whitelist = raw.map(function (e) {
-      return e && typeof e === "object" ? e.ip : e;
-    });
-    data.applied = data.enabled === true && data.whitelist.indexOf(data.currentIp) !== -1;
-    return data;
+    return normalizeStatus(data);
+  });
+}
+
+// /add 返回 403 时通常是当前网段已在别的槽位。用只读接口确认当前网段是否已加白：
+// 已加白就照常算成功，并标记 conflict 供面板提示实际槽位。
+function resolveRejected(token, addData) {
+  var reason = serverMessage(addData) || "当前网段可能已在其它槽位";
+  return requestWithRetry("GET", API_BASE + encodeURIComponent(token)).then(function (r) {
+    var data = r.error ? null : parseJson(r.body);
+    if (r.error || r.status >= 400 || !isStatusPayload(data)) {
+      return { error: "写入被拒（" + reason + "），状态查询失败：" + describeFailure(r, data) };
+    }
+    var st = normalizeStatus(data);
+    st.conflict = true;
+    if (st.enabled === true && !st.applied) {
+      st.error = "写入被拒（" + reason + "），当前网段 " + st.currentIp + " 不在白名单";
+    }
+    return st;
   });
 }
 
@@ -328,7 +401,16 @@ function describe(index, ctx) {
       return ip + slotTag + (cellIps[ip] ? " 📶" : "") + (ip === st.currentIp ? " ←" : "");
     })
     .join("\n    ");
-  return head + "✅ " + st.whitelist.length + "/" + st.limit + "\n    " + ips;
+  var note = "";
+  if (st.conflict) {
+    var actual = slotOf[st.currentIp];
+    note =
+      "\n    ⚠️ 当前网段已在" +
+      (actual !== undefined ? "槽位 " + actual : "无槽位条目") +
+      "，未写入" +
+      (pin ? "槽位 " + ctx.slot : "新条目");
+  }
+  return head + "✅ " + st.whitelist.length + "/" + st.limit + note + "\n    " + ips;
 }
 
 function parseTokens(value) {
@@ -395,7 +477,7 @@ if (configError) {
       var state =
         (st.currentIp || "?") +
         "|" +
-        (st.applied ? "1" : "0") +
+        (st.applied ? (st.conflict ? "c" : "1") : "0") +
         "|" +
         (results[i].slot === null ? "slotless" : results[i].slot) +
         "|" +

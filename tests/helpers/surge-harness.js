@@ -8,10 +8,12 @@ async function runScript(filename, options = {}) {
   const {
     store = {}, request, response, argument, http,
     timeoutMs = 1500, scriptType, now, omitClearTimeout = false, notificationError,
+    network, timerScale = 1,
   } = options;
   const requests = [];
   const notifications = [];
   const logs = [];
+  const timers = [];
   const pendingTimers = new Set();
   let doneCount = 0;
   let doneValue;
@@ -56,10 +58,12 @@ async function runScript(filename, options = {}) {
     },
     Date: DateClass,
     setTimeout(callback, delay, ...args) {
+      timers.push(delay);
+      // timerScale 小于 1 时按比例缩短等待，测试只断言脚本请求的原始延迟。
       const handle = setTimeout(() => {
         pendingTimers.delete(handle);
         try { callback(...args); } catch (error) { rejectDone(error); }
-      }, delay);
+      }, delay * timerScale);
       pendingTimers.add(handle);
       return handle;
     },
@@ -70,6 +74,7 @@ async function runScript(filename, options = {}) {
   if (request !== undefined) context.$request = structuredClone(request);
   if (response !== undefined) context.$response = structuredClone(response);
   if (argument !== undefined) context.$argument = argument;
+  if (network !== undefined) context.$network = structuredClone(network);
   for (const method of ["get", "post", "put", "delete", "head", "options", "patch"]) {
     context.$httpClient[method] = (input, callback) => {
       const requestOptions = typeof input === "string" ? { url: input } : structuredClone(input);
@@ -89,7 +94,7 @@ async function runScript(filename, options = {}) {
     vm.runInNewContext(fs.readFileSync(filename, "utf8"), context, { filename, timeout: timeoutMs });
     await completion;
     await new Promise((resolve) => setImmediate(resolve));
-    return { requests, notifications, logs, store, doneCount, doneValue };
+    return { requests, notifications, logs, timers, store, doneCount, doneValue };
   } finally {
     clearTimeout(timer);
     for (const handle of pendingTimers) clearTimeout(handle);
